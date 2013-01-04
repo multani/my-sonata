@@ -231,15 +231,7 @@ class Library:
         self.libraryposition = {}
         self.libraryselectedpath = {}
         self.library_browse(root=SongRecord(path="/"))
-        try:
-            if len(self.librarydata) > 0:
-                first = Gtk.TreePath.new_first()
-                to = Gtk.TreePath.new()
-                to.append_index(len(self.librarydata) - 1)
-                self.library_selection.unselect_range(first, to)
-        except Exception as e:
-            # XXX import logger here in the future
-            raise e
+        self.library_selection.unselect_all()
         GLib.idle_add(self.library.scroll_to_point, 0, 0)
 
     def view_caches_reset(self):
@@ -943,12 +935,7 @@ class Library:
 
     def library_retain_selection(self, prev_selection, prev_selection_root,
                                  prev_selection_parent):
-        # Unselect everything:
-        if len(self.librarydata) > 0:
-            first = Gtk.TreePath.new_first()
-            to = Gtk.TreePath.new()
-            to.append_index(len(self.librarydata) - 1)
-            self.library_selection.unselect_range(first, to)
+        self.library_selection.unselect_all()
         # Now attempt to retain the selection from before the update:
         for value in prev_selection:
             for row in self.librarydata:
