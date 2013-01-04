@@ -134,17 +134,20 @@ class Library:
         self.sonatapb = self.library.render_icon('sonata',
                                                  Gtk.IconSize.LARGE_TOOLBAR)
 
-        # list of the library views: (id, name, icon name, label)
-        self.VIEWS = [
-            (consts.VIEW_FILESYSTEM, 'filesystem',
-             Gtk.STOCK_HARDDISK, _("Filesystem")),
-            (consts.VIEW_ALBUM, 'album',
-             'sonata-album', _("Albums")),
-            (consts.VIEW_ARTIST, 'artist',
-             'sonata-artist', _("Artists")),
-            (consts.VIEW_GENRE, 'genre',
-             Gtk.STOCK_ORIENTATION_PORTRAIT, _("Genres")),
-            ]
+        self.VIEWS = {
+            consts.VIEW_FILESYSTEM: (
+                'filesystem', Gtk.STOCK_HARDDISK, _("Filesystem")),
+            consts.VIEW_ALBUM: ('album', 'sonata-album', _("Albums")),
+            consts.VIEW_ARTIST: ('artist', 'sonata-artist', _("Artists")),
+            consts.VIEW_GENRE: (
+                'genre', Gtk.STOCK_ORIENTATION_PORTRAIT, _("Genres")),
+        }
+        self.ACTION_TO_VIEW = {
+            'filesystemview': consts.VIEW_FILESYSTEM,
+            'albumview': consts.VIEW_ALBUM,
+            'artistview': consts.VIEW_ARTIST,
+            'genreview': consts.VIEW_GENRE,
+        }
 
         self.library.connect('row_activated', self.on_library_row_activated)
         self.library.connect('button_press_event',
@@ -188,7 +191,7 @@ class Library:
     def get_libraryactions(self):
         return [(name + 'view', icon, label,
              None, None, self.on_libraryview_chosen)
-            for _view, name, icon, label in self.VIEWS]
+            for name, icon, label in self.VIEWS.values()]
 
     def get_model(self):
         return self.librarydata
@@ -219,14 +222,7 @@ class Library:
     def on_libraryview_chosen(self, action):
         if self.search_visible():
             self.on_search_end(None)
-        if action.get_name() == 'filesystemview':
-            self.config.lib_view = consts.VIEW_FILESYSTEM
-        elif action.get_name() == 'artistview':
-            self.config.lib_view = consts.VIEW_ARTIST
-        elif action.get_name() == 'genreview':
-            self.config.lib_view = consts.VIEW_GENRE
-        elif action.get_name() == 'albumview':
-            self.config.lib_view = consts.VIEW_ALBUM
+        self.config.lib_view = self.ACTION_TO_VIEW[action.get_name()]
         self.library.grab_focus()
         self.libraryposition = {}
         self.libraryselectedpath = {}
@@ -406,8 +402,8 @@ class Library:
             self.breadcrumbs.remove(b)
 
         # find info for current view
-        view, _name, icon, label = [v for v in self.VIEWS
-                          if v[0] == self.config.lib_view][0]
+        view = self.config.lib_view
+        _name, icon, label = self.VIEWS[view]
 
         # the first crumb is the root of the current view
         self.crumb_section.set_label(label)
