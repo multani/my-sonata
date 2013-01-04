@@ -1,0 +1,15 @@
+language: python
+
+python:
+    - 3.2
+    - 3.3
+
+before_install:
+    - sudo apt-get update -qq
+    - sudo apt-get install -qq python3-gi libgtk-3-0 gir1.2-gtk-3.0
+
+install:
+    - pip install --use-mirrors python-mpd2
+    - ln -s /usr/lib/python3/dist-packages/gi .
+
+script: ./run-tests
