@@ -190,7 +190,7 @@ class Library:
 
     def get_libraryactions(self):
         return [(name + 'view', icon, label,
-             None, None, self.on_libraryview_chosen)
+                 None, None, self.on_libraryview_chosen)
             for name, icon, label in self.VIEWS.values()]
 
     def get_model(self):
@@ -1051,25 +1051,25 @@ class Library:
 
     def library_get_parent(self):
         wd = self.config.wd
-        if self.config.lib_view == consts.VIEW_ALBUM:
-            value = SongRecord(path="/")
-        elif self.config.lib_view == consts.VIEW_ARTIST:
-            if wd.album is None:
-                value = SongRecord(path="/")
-            else:
-                value = SongRecord(artist = wd.artist)
+        path = "/"
+        artist = None
+        genre = None
+
+        if self.config.lib_view == consts.VIEW_ARTIST:
+            if wd.album is not None:
+                path = None
+                artist = wd.artist
         elif self.config.lib_view == consts.VIEW_GENRE:
             if wd.album is not None:
-                value = SongRecord(genre=wd.genre,
-                                   artist=wd.artist)
+                genre, artist = (wd.genre, wd.artist)
+                path = None
             elif wd.artist is not None:
-                value = SongRecord(genre=wd.genre)
-            else:
-                value = SongRecord(path="/")
-        else:
-            newvalue = '/'.join(wd.path.split('/')[:-1]) or '/'
-            value = SongRecord(path=newvalue)
-        return value
+                genre = wd.genre
+                path = None
+        elif wd.path:
+            path = os.path.dirname(wd.path) or '/'
+
+        return SongRecord(path=path, artist=artist, genre=genre)
 
     def library_browse_parent(self, _action):
         if not self.search_visible():
