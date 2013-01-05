@@ -1044,8 +1044,6 @@ class Library:
         if icon == self.sonatapb:
             # Song found, add item
             self.on_add_item(self.library)
-        elif value.path == "..":
-            self.library_browse_parent(None)
         else:
             self.library_browse(None, value)
 
@@ -1071,35 +1069,20 @@ class Library:
 
         return SongRecord(path=path, artist=artist, genre=genre)
 
-    def library_browse_parent(self, _action):
+    def on_browse_parent(self):
         if not self.search_visible():
             if self.library.is_focus():
                 value = self.library_get_parent()
                 self.library_browse(None, value)
                 return True
 
-    def not_parent_is_selected(self):
-        # Returns True if something is selected and it's not
-        # ".." or "/":
-        model, rows = self.library_selection.get_selected_rows()
-        for path in rows:
-            i = model.get_iter(path)
-            value = model.get_value(i, 2)
-            if value != ".." and value != "/":
-                return True
-        return False
-
-    def get_path_child_filenames(self, return_root, selected_only=True):
+    def get_path_child_filenames(self, return_root):
         # If return_root=True, return main directories whenever possible
         # instead of individual songs in order to reduce the number of
         # mpd calls we need to make. We won't want this behavior in some
         # instances, like when we want all end files for editing tags
         items = []
-        if selected_only:
-            model, rows = self.library_selection.get_selected_rows()
-        else:
-            model = self.librarydata
-            rows = [(i,) for i in range(len(model))]
+        model, rows = self.library_selection.get_selected_rows()
         for path in rows:
             i = model.get_iter(path)
             pb = model.get_value(i, 0)

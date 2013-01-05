@@ -269,7 +269,7 @@ class Base:
             ('updatefullmenu', None, _('_Entire Library'), '<Ctrl><Shift>u',
              None, self.on_updatedb),
             ('updateselectedmenu', None, _('_Selected Items'), '<Ctrl>u', None,
-             self.on_updatedb_shortcut),
+             self.on_updatedb_path),
             ('preferencemenu', Gtk.STOCK_PREFERENCES, _('_Preferences...'),
              'F5', None, self.on_prefs),
             ('aboutmenu', Gtk.STOCK_ABOUT, _('_About...'), 'F1', None, self.on_about),
@@ -1094,7 +1094,7 @@ class Base:
         # These shortcuts were moved here so that they don't interfere with
         # searching the library
         if shortcut == 'BackSpace' and self.current_tab == self.TAB_LIBRARY:
-            return self.library.library_browse_parent(None)
+            return self.library.on_browse_parent()
         elif shortcut == 'Escape':
             if self.current_tab == self.TAB_LIBRARY \
                and self.library.search_visible():
@@ -2028,21 +2028,12 @@ class Base:
             self.mpd.update('/') # XXX we should pass a list here!
             self.mpd_update_queued = True
 
-    def on_updatedb_shortcut(self, _action):
-        # If no songs selected, update view. Otherwise update
-        # selected items.
-        if self.library.not_parent_is_selected():
-            self.on_updatedb_path(True)
-        else:
-            self.on_updatedb_path(False)
-
-    def on_updatedb_path(self, selected_only):
+    def on_updatedb_path(self, _action):
         if self.conn and self.current_tab == self.TAB_LIBRARY:
             if self.library.search_visible():
                 self.library.on_search_end(None)
-            filenames = self.library.get_path_child_filenames(True,
-                                                              selected_only)
-            if len(filenames) > 0:
+            filenames = self.library.get_path_child_filenames(True)
+            if len(filenames):
                 self.mpd.update(filenames)
                 self.mpd_update_queued = True
 
