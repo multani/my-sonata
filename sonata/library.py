@@ -273,109 +273,98 @@ class Library:
         if not self.connected():
             return
 
-        if root is None or (self.config.lib_view == consts.VIEW_FILESYSTEM \
-                            and root.path is None):
-            root = SongRecord(path="/")
-        if self.config.wd is None or (self.config.lib_view == \
-                                      consts.VIEW_FILESYSTEM and \
-                                      self.config.wd.path is None):
-            self.config.wd = SongRecord(path="/")
+        default_path = SongRecord(path="/")
+        active_is_filesystem = self.config.lib_view == consts.VIEW_FILESYSTEM
+        wd = self.config.wd
+
+        if root is None or (active_is_filesystem and root.path is None):
+            root = default_path
+        if wd is None or (active_is_filesystem and wd.path is None):
+            self.config.wd = wd = default_path
 
         prev_selection = []
         prev_selection_root = False
         prev_selection_parent = False
-        if root == self.config.wd:
+        if root == wd:
             # This will happen when the database is updated. So, lets save
             # the current selection in order to try to re-select it after
             # the update is over.
             model, selected = self.library_selection.get_selected_rows()
             for path in selected:
                 prev_selection.append(model.get_value(model.get_iter(path), 1))
-            self.libraryposition[self.config.wd] = \
-                    self.library.get_visible_rect().width
+            self.libraryposition[wd] = self.library.get_visible_rect().width
             path_updated = True
         else:
             path_updated = False
 
         new_level = self.library_get_data_level(root)
-        curr_level = self.library_get_data_level(self.config.wd)
+        curr_level = self.library_get_data_level(wd)
         # The logic below is more consistent with, e.g., thunar.
         if new_level > curr_level:
             # Save position and row for where we just were if we've
             # navigated into a sub-directory:
-            self.libraryposition[self.config.wd] = \
-                    self.library.get_visible_rect().width
+            self.libraryposition[wd] = self.library.get_visible_rect().width
             model, rows = self.library_selection.get_selected_rows()
             if len(rows) > 0:
                 data = self.librarydata.get_value(
                     self.librarydata.get_iter(rows[0]), 2)
-                self.libraryselectedpath[self.config.wd] = rows[0]
-        elif (self.config.lib_view == consts.VIEW_FILESYSTEM and \
-              root != self.config.wd) \
-        or (self.config.lib_view != consts.VIEW_FILESYSTEM and new_level != \
-            curr_level):
+                self.libraryselectedpath[wd] = rows[0]
+        elif active_is_filesystem and (root != wd or new_level != curr_level):
             # If we've navigated to a parent directory, don't save
             # anything so that the user will enter that subdirectory
             # again at the top position with nothing selected
-            self.libraryposition[self.config.wd] = 0
-            self.libraryselectedpath[self.config.wd] = None
+            self.libraryposition[wd] = 0
+            self.libraryselectedpath[wd] = None
 
         # In case sonata is killed or crashes, we'll save the library state
         # in 5 seconds (first removing any current settings_save timeouts)
-        if self.config.wd != root:
+        if wd != root:
             try:
                 GLib.source_remove(self.save_timeout)
             except:
                 pass
             self.save_timeout = GLib.timeout_add(5000, self.settings_save)
 
-        self.config.wd = root
+        self.config.wd = wd = root
         self.library.freeze_child_notify()
         self.librarydata.clear()
 
         # Populate treeview with data:
         bd = []
-        wd = self.config.wd
         while len(bd) == 0:
-            if self.config.lib_view == consts.VIEW_FILESYSTEM:
+            album, artist, year, genre = (wd.album, wd.artist, wd.year,
+                                          wd.genre)
+            albumview = False
+            artistview = False
+            genreview= False
+
+            if self.config.lib_view == consts.VIEW_ALBUM and album is None:
+                albumview = True
+            elif self.config.lib_view == consts.VIEW_ARTIST and \
+                 artist is None and album is None:
+                artistview = True
+            elif self.config.lib_view == consts.VIEW_GENRE and \
+                 genre is None and artist is None and album is None:
+                genreview = True
+
+            if active_is_filesystem:
                 bd = self.library_populate_filesystem_data(wd.path)
-            elif self.config.lib_view == consts.VIEW_ALBUM:
-                if wd.album is not None:
-                    bd = self.library_populate_data(artist=wd.artist,
-                                                    album=wd.album,
-                                                    year=wd.year)
-                else:
-                    bd = self.library_populate_toplevel_data(albumview=True)
-            elif self.config.lib_view == consts.VIEW_ARTIST:
-                if wd.artist is not None and wd.album is not None:
-                    bd = self.library_populate_data(artist=wd.artist,
-                                                    album=wd.album,
-                                                    year=wd.year)
-                elif self.config.wd.artist is not None:
-                    bd = self.library_populate_data(artist=wd.artist)
-                else:
-                    bd = self.library_populate_toplevel_data(artistview=True)
-            elif self.config.lib_view == consts.VIEW_GENRE:
-                if wd.genre is not None and \
-                   wd.artist is not None and \
-                   wd.album is not None:
-                    bd = self.library_populate_data(genre=wd.genre,
-                                                    artist=wd.artist,
-                                                    album=wd.album,
-                                                    year=wd.year)
-                elif wd.genre is not None:
-                    bd = self.library_populate_data(genre=wd.genre,
-                                                    artist=wd.artist)
-                else:
-                    bd = self.library_populate_toplevel_data(genreview=True)
+            elif any(albumview, artistview, genreview):
+                bd = self.library_populate_toplevel_data(genreview=genreview,
+                                                         artistview=artistview,
+                                                         albumview=albumview)
+            else:
+                # Give them all, library_populate_data handles Nones.
+                bd = self.library_populate_data(artist=artist, album=album,
+                                                year=year, genre=genre)
 
             if len(bd) == 0:
                 # Nothing found; go up a level until we reach the top level
                 # or results are found
-                last_wd = self.config.wd
                 self.config.wd = self.library_get_parent()
-                if self.config.wd == last_wd:
+                if self.config.wd == wd:
                     break
+                wd = self.config.wd
 
         for _sort, path in bd:
             self.librarydata.append(path)
