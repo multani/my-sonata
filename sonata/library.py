@@ -306,8 +306,6 @@ class Library:
             self.libraryposition[wd] = self.library.get_visible_rect().height
             model, rows = self.library_selection.get_selected_rows()
             if len(rows) > 0:
-                data = self.librarydata.get_value(
-                    self.librarydata.get_iter(rows[0]), 2)
                 self.libraryselectedpath[wd] = rows[0]
         elif active_is_filesystem and (root != wd or new_level != curr_level):
             # If we've navigated to a parent directory, don't save
