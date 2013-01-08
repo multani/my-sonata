@@ -292,7 +292,7 @@ class Library:
             model, selected = self.library_selection.get_selected_rows()
             for path in selected:
                 prev_selection.append(model.get_value(model.get_iter(path), 1))
-            self.libraryposition[wd] = self.library.get_visible_rect().width
+            self.libraryposition[wd] = self.library.get_visible_rect().height
             path_updated = True
         else:
             path_updated = False
@@ -303,7 +303,7 @@ class Library:
         if new_level > curr_level:
             # Save position and row for where we just were if we've
             # navigated into a sub-directory:
-            self.libraryposition[wd] = self.library.get_visible_rect().width
+            self.libraryposition[wd] = self.library.get_visible_rect().height
             model, rows = self.library_selection.get_selected_rows()
             if len(rows) > 0:
                 data = self.librarydata.get_value(
