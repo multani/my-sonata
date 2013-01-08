@@ -332,25 +332,21 @@ class Library:
         while len(bd) == 0:
             album, artist, year, genre = (wd.album, wd.artist, wd.year,
                                           wd.genre)
-            albumview = False
-            artistview = False
-            genreview= False
+            toplevel = False
 
             if self.config.lib_view == consts.VIEW_ALBUM and album is None:
-                albumview = True
+                toplevel = True
             elif self.config.lib_view == consts.VIEW_ARTIST and \
                  artist is None and album is None:
-                artistview = True
+                toplevel = True
             elif self.config.lib_view == consts.VIEW_GENRE and \
                  genre is None and artist is None and album is None:
-                genreview = True
+                toplevel = True
 
             if active_is_filesystem:
                 bd = self.library_populate_filesystem_data(wd.path)
-            elif any(albumview, artistview, genreview):
-                bd = self.library_populate_toplevel_data(genreview=genreview,
-                                                         artistview=artistview,
-                                                         albumview=albumview)
+            elif toplevel:
+                bd = self.library_populate_toplevel_data(self.config.lib_view)
             else:
                 # Give them all, library_populate_data handles Nones.
                 bd = self.library_populate_data(artist=artist, album=album,
@@ -505,8 +501,10 @@ class Library:
             bd.sort(key=operator.itemgetter(0))
         return bd
 
-    def library_get_toplevel_cache(self, genreview=False, artistview=False,
-                                   albumview=False):
+    def library_get_toplevel_cache(self, view=None):
+        genreview = view == consts.VIEW_GENRE
+        artistview = view == consts.VIEW_ARTIST
+        albumview = view == consts.VIEW_ALBUM
         if genreview and self.lib_view_genre_cache is not None:
             bd = self.lib_view_genre_cache
         elif artistview and self.lib_view_artist_cache is not None:
@@ -526,13 +524,15 @@ class Library:
                     info[0] = pb2
         return bd
 
-    def library_populate_toplevel_data(self, genreview=False, artistview=False,
-                                       albumview=False):
-        bd = self.library_get_toplevel_cache(genreview, artistview, albumview)
+    def library_populate_toplevel_data(self, view=None):
+        bd = self.library_get_toplevel_cache(view)
         if bd is not None:
             # We have our cached data, woot.
             return bd
         bd = []
+        genreview = view == consts.VIEW_GENRE
+        artistview = view == consts.VIEW_ARTIST
+        albumview = view == consts.VIEW_ALBUM
         if genreview or artistview:
             # Only for artist/genre views, album view is handled differently
             # since multiple artists can have the same album name
