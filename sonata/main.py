@@ -2210,7 +2210,7 @@ class Base:
         datalist = []
         album = self.songinfo.album or ''
         songs, _playtime, _num_songs = \
-                self.library.library_return_search_items(album=album)
+                self.library.search.get_search_items(album=album)
         for song in songs:
             year = song.date or ''
             artist = song.artist or ''
