@@ -12,7 +12,7 @@ from sonata.song import SongRecord
 
 
 VARIOUS_ARTISTS = _("Various Artists")
-
+NOTAG = _("Untagged")
 
 def list_mark_various_artists_albums(albums):
     for i in range(len(albums)):
@@ -48,8 +48,6 @@ class LibrarySearch(object):
         self.cache_albums = None
         self.cache_years = None
 
-        self.NOTAG = _("Untagged")
-
     def invalidate_cache(self):
         self.cache_genres = None
         self.cache_artists = None
@@ -76,7 +74,7 @@ class LibrarySearch(object):
         s = []
         skip_type = (typename == 'artist' and search == VARIOUS_ARTISTS)
         if search is not None and not skip_type:
-            if search == self.NOTAG:
+            if search == NOTAG:
                 itemlist = [search, '']
             else:
                 itemlist = []
@@ -120,7 +118,7 @@ class LibrarySearch(object):
         s = []
         skip_type = (typename == 'artist' and search == VARIOUS_ARTISTS)
         if search is not None and not skip_type:
-            if search == self.NOTAG:
+            if search == NOTAG:
                 itemlist = [search, '']
             else:
                 itemlist = [search]
@@ -222,8 +220,6 @@ class LibraryView(object):
         self.song_pixbuf = self.library.library.render_icon_pixbuf(
             self.song_icon, Gtk.IconSize.MENU)
 
-        self.NOTAG = _("Untagged")
-
     def invalidate_cache(self):
         self.cache = None
 
@@ -309,8 +305,8 @@ class LibraryView(object):
             # Artists within a genre
             artists = self.library.search.get_list_items('artist', genre=genre)
             if len(artists) > 0:
-                if not self.NOTAG in artists:
-                    artists.append(self.NOTAG)
+                if not NOTAG in artists:
+                    artists.append(NOTAG)
                 for artist in artists:
                     playtime, num_songs = self.library.search.get_count(
                         genre=genre, artist=artist)
@@ -336,8 +332,8 @@ class LibraryView(object):
                 else:
                     years = self.library.search.get_list_items('date', artist=artist,
                                                           album=album)
-                if not self.NOTAG in years:
-                    years.append(self.NOTAG)
+                if not NOTAG in years:
+                    years.append(NOTAG)
                 for year in years:
                     if genre is not None:
                         playtime, num_songs = self.library.search.get_count(
@@ -363,19 +359,19 @@ class LibraryView(object):
                     if num_songs > 0:
                         cache_data = SongRecord(artist=artist, album=album, path=path)
                         display = misc.escape_html(album)
-                        if year and len(year) > 0 and year != self.NOTAG:
+                        if year and len(year) > 0 and year != NOTAG:
                             display += " <span weight='light'>(%s)</span>" \
                                     % misc.escape_html(year)
                         display += self.add_display_info(num_songs, playtime)
                         ordered_year = year
-                        if ordered_year == self.NOTAG:
+                        if ordered_year == NOTAG:
                             ordered_year = '9999'
                         pb = self.library.artwork.get_library_artwork_cached_pb(
                             cache_data, self.library.albumpb)
                         bd += [(ordered_year + misc.lower_no_the(album),
                                 [pb, data, display])]
             # Now, songs not in albums:
-            bd += self._get_data_songs(genre, artist, self.NOTAG, None)
+            bd += self._get_data_songs(genre, artist, NOTAG, None)
         else:
             # Songs within an album, artist, year, and possibly genre
             bd += self._get_data_songs(genre, artist, album, year)
@@ -500,17 +496,17 @@ class AlbumView(LibraryView):
         for item in self.library.mpd.listallinfo('/'):
             if 'file' in item and 'album' in item:
                 album = item['album']
-                artist = item.get('artist', self.NOTAG)
-                year = item.get('date', self.NOTAG)
+                artist = item.get('artist', NOTAG)
+                year = item.get('date', NOTAG)
                 path = self.library.get_multicd_album_root_dir(
                     os.path.dirname(item['file']))
                 data = SongRecord(album=album, artist=artist,
                                   year=year, path=path)
                 albums.append(data)
-                if album == self.NOTAG:
+                if album == NOTAG:
                     untagged_found = True
         if not untagged_found:
-            albums.append(SongRecord(album=self.NOTAG))
+            albums.append(SongRecord(album=NOTAG))
         albums = misc.remove_list_duplicates(albums, case=False)
         albums = list_mark_various_artists_albums(albums)
         bd = []
@@ -523,14 +519,14 @@ class AlbumView(LibraryView):
                                        year=year, path=path)
                 display = misc.escape_html(album)
                 if artist and year and len(artist) > 0 and len(year) > 0 \
-                   and artist != self.NOTAG and year != self.NOTAG:
+                   and artist != NOTAG and year != NOTAG:
                     display += " <span weight='light'>(%s, %s)</span>" \
                             % (misc.escape_html(artist),
                                misc.escape_html(year))
-                elif artist and len(artist) > 0 and artist != self.NOTAG:
+                elif artist and len(artist) > 0 and artist != NOTAG:
                     display += " <span weight='light'>(%s)</span>" \
                             % misc.escape_html(artist)
-                elif year and len(year) > 0 and year != self.NOTAG:
+                elif year and len(year) > 0 and year != NOTAG:
                     display += " <span weight='light'>(%s)</span>" \
                             % misc.escape_html(year)
                 display += self.add_display_info(num_songs, playtime)
@@ -560,8 +556,8 @@ class ArtistView(LibraryView):
         if self.cache is not None:
             return self.cache
         items = self.library.search.get_list_items('artist')
-        if not (self.NOTAG in items):
-            items.append(self.NOTAG)
+        if not (NOTAG in items):
+            items.append(NOTAG)
         bd = []
         for item in items:
             playtime, num_songs = self.library.search.get_count(artist=item)
@@ -595,8 +591,8 @@ class GenreView(LibraryView):
         if self.cache is not None:
             return self.cache
         items = self.library.search.get_list_items('genre')
-        if not (self.NOTAG in items):
-            items.append(self.NOTAG)
+        if not (NOTAG in items):
+            items.append(NOTAG)
         bd = []
         for item in items:
             playtime, num_songs = self.library.search.get_count(genre=item)
@@ -629,8 +625,6 @@ class Library:
         self.connected = connected
         self.on_library_button_press = on_library_button_press
         self.get_multicd_album_root_dir = get_multicd_album_root_dir
-
-        self.NOTAG = _("Untagged")
 
         self.search_terms = [_('Artist'), _('Title'), _('Album'), _('Genre'),
                              _('Filename'), _('Everything')]
