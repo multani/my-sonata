@@ -149,7 +149,6 @@ class LibrarySearch(object):
             playtime = 0
             num_songs = 0
             results = []
-            strip_type = None
 
             if len(args_tuple) == 0:
                 return None, 0, 0
@@ -157,23 +156,21 @@ class LibrarySearch(object):
             items = self.mpd.search(*args_tuple)
             if items is not None:
                 for item in items:
-                    if strip_type is None or (strip_type is not None and not \
-                                              strip_type in item.keys()):
-                        match = True
-                        pos = 0
-                        # Ensure that if, e.g., "foo" is searched,
-                        # "foobar" isn't returned too
-                        for arg in args_tuple[::2]:
-                            if arg in item and \
-                               str(item.get(arg, '')).upper() != \
-                               str(args_tuple[pos + 1]).upper():
-                                match = False
-                                break
-                            pos += 2
-                        if match:
-                            results.append(item)
-                            num_songs += 1
-                            playtime += item.time
+                    match = True
+                    pos = 0
+                    # Ensure that if, e.g., "foo" is searched,
+                    # "foobar" isn't returned too
+                    for arg in args_tuple[::2]:
+                        if arg in item and \
+                           str(item.get(arg, '')).upper() != \
+                           str(args_tuple[pos + 1]).upper():
+                            match = False
+                            break
+                        pos += 2
+                    if match:
+                        results.append(item)
+                        num_songs += 1
+                        playtime += item.time
         return (results, int(playtime), num_songs)
 
     def get_list_items(self, itemtype, genre=None, artist=None, album=None,
