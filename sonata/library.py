@@ -194,7 +194,7 @@ class LibrarySearch(object):
                     songs, playtime, num_songs =  self.get_search_items(
                         genre, artist, album, year)
                     for song in songs:
-                        items.append(song.get(itemtype))
+                        items.append(song.get(itemtype, ''))
                 else:
                     items = self.mpd.list(itemtype, *s)
                 for item in items:
