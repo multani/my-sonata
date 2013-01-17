@@ -184,22 +184,17 @@ class LibrarySearch(object):
                 # If we have untagged tags (''), use search instead
                 # of list because list will not return anything.
                 if '' in s:
-                    items = []
-                    songs, playtime, num_songs =  self.get_search_items(
+                    songs, _playtime, _num_songs =  self.get_search_items(
                         genre, artist, album, year)
-                    for song in songs:
-                        items.append(song.get(itemtype, ''))
+                    items = [song.get(itemtype, '') for song in songs]
                 else:
                     items = self.mpd.list(itemtype, *s)
-                for item in items:
-                    if len(item) > 0:
-                        results.append(item)
+                results.extend([item for item in items if len(item) > 0])
         else:
-            if genre is None and artist is None and album is None and year \
-               is None:
-                for item in self.mpd.list(itemtype):
-                    if len(item) > 0:
-                        results.append(item)
+            no_search = [val is None for val in (genre, artist, album, year)]
+            if all(no_search):
+                items = self.mpd.list(itemtype)
+                results = [item for item in items if len(item) > 0]
         if ignore_case:
             results = misc.remove_list_duplicates(results, case=False)
         results.sort(key=locale.strxfrm)
