@@ -143,34 +143,31 @@ class LibrarySearch(object):
     def get_search_items(self, genre=None, artist=None, album=None, year=None):
         # Returns all mpd items, using mpd's 'search', along with
         # playtime and num_songs.
+
+        playtime = 0
+        num_songs = 0
+        results = []
+
         searches = self.get_searches(genre, artist, album, year)
         for s in searches:
             args_tuple = tuple(map(str, s))
-            playtime = 0
-            num_songs = 0
-            results = []
 
             if len(args_tuple) == 0:
                 return None, 0, 0
 
-            items = self.mpd.search(*args_tuple)
-            if items is not None:
-                for item in items:
-                    match = True
-                    pos = 0
-                    # Ensure that if, e.g., "foo" is searched,
-                    # "foobar" isn't returned too
-                    for arg in args_tuple[::2]:
-                        if arg in item and \
-                           str(item.get(arg, '')).upper() != \
-                           str(args_tuple[pos + 1]).upper():
-                            match = False
-                            break
-                        pos += 2
-                    if match:
-                        results.append(item)
-                        num_songs += 1
-                        playtime += item.time
+            for item in self.mpd.search(*args_tuple):
+                match = True
+                # Ensure that if, e.g., "foo" is searched,
+                # "foobar" isn't returned too
+                for arg, arg_value in zip(args_tuple[::2], args_tuple[1::2]):
+                    if arg in item and \
+                       str(item.get(arg, '')).upper() != arg_value.upper():
+                        match = False
+                        break
+                if match:
+                    results.append(item)
+                    num_songs += 1
+                    playtime += item.time
         return (results, int(playtime), num_songs)
 
     def get_list_items(self, itemtype, genre=None, artist=None, album=None,
@@ -1116,7 +1113,7 @@ class Library:
                             items.append(data.path)
                 else:
                     results, _playtime, _num_songs = \
-                            self.library_return_search_items(
+                            self.search.get_search_items(
                                 genre=data.genre, artist=data.artist, album=data.album,
                                 year=data.year)
                     for item in results:
