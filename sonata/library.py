@@ -365,26 +365,22 @@ class LibraryView(object):
 
     def _get_data_songs(self, genre, artist, album, year):
         bd = []
-        if genre is not None:
-            songs, _playtime, _num_songs = \
-            self.library.search.get_search_items(genre=genre, artist=artist,
-                                                 album=album, year=year)
-        else:
-            songs, _playtime, _num_songs = self.library.search.get_search_items(
-                artist=artist, album=album, year=year)
+        songs, _playtime, _num_songs = self.library.search.get_search_items(
+            genre=genre, artist=artist, album=album, year=year)
+
         for song in songs:
             data = SongRecord(path=song.file)
             track = str(song.get('track', 99)).zfill(2)
             disc = str(song.get('disc', 99)).zfill(2)
+            song_data = [self.library.sonatapb, data, formatting.parse(
+                self.library.config.libraryformat, song, True)]
+            sort_data = 'f{disc}{track}'.format(disc=disc, track=track)
             try:
-                bd += [('f' + disc + track + misc.lower_no_the(song.title),
-                        [self.library.sonatapb, data, formatting.parse(
-                            self.library.config.libraryformat, song, True)])]
+                song_title = misc.lower_no_the(song.title)
             except:
-                bd += [('f' + disc + track + song.file.lower(),
-                        [self.library.sonatapb, data,
-                         formatting.parse(self.library.config.libraryformat, song,
-                                          True)])]
+                song_title = song.file.lower()
+            sort_data += song_title
+            bd += [(sort_data, song_data)]
         return bd
 
 
