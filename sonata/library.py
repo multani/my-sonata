@@ -245,12 +245,8 @@ class LibraryView(object):
                 action)
 
     def get_data_level(self, data):
-        # Returns the number of items stored in data, excluding the path:
-        level = 0
-        for item in data:
-            if item is not None:
-                level += 1
-        return level
+        # Returns the number of items stored in data
+        return sum([1 for item in data if item is not None])
 
     def _get_crumb_data(self, keys, nkeys, parts):
         crumbs = []
