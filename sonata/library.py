@@ -204,13 +204,18 @@ class LibrarySearch(object):
 class LibraryView(object):
     def __init__(self, library):
         self.cache = None
+        self.data_rows = {}
         self.library = library
         self.song_icon = 'sonata'
         self.song_pixbuf = self.library.library.render_icon_pixbuf(
             self.song_icon, Gtk.IconSize.MENU)
 
+    def invalidate_row_cache(self):
+        self.data_rows = {}
+
     def invalidate_cache(self):
         self.cache = None
+        self.invalidate_row_cache()
 
     def add_display_info(self, num_songs, playtime):
         seconds = int(playtime)
@@ -262,9 +267,8 @@ class LibraryView(object):
                 cache_data = SongRecord(artist=self.library.config.wd.artist,
                                         album=self.library.config.wd.album,
                                         path=self.library.config.wd.path)
-                pb = self.library.artwork.get_library_artwork_cached_pb(cache_data,
-                                                                None)
-                if pb is None:
+                pb = self.library.artwork.get_pixbuf(cache_data)
+                if not pb:
                     icon = 'sonata-album'
             elif key == 'artist':
                 icon = 'sonata-artist'
@@ -342,7 +346,6 @@ class LibraryView(object):
                         data = SongRecord(artist=artist, album=album,
                                           year=year, path=path)
                     if num_songs > 0:
-                        cache_data = SongRecord(artist=artist, album=album, path=path)
                         display = misc.escape_html(album)
                         if year and len(year) > 0 and year != NOTAG:
                             display += " <span weight='light'>(%s)</span>" \
@@ -351,10 +354,16 @@ class LibraryView(object):
                         ordered_year = year
                         if ordered_year == NOTAG:
                             ordered_year = '9999'
-                        pb = self.library.artwork.get_library_artwork_cached_pb(
-                            cache_data, self.library.albumpb)
                         bd += [(ordered_year + misc.lower_no_the(album),
-                                [pb, data, display])]
+                                [self.library.albumpb, data, display])]
+                    # Sort early to add pb in display order
+                    bd.sort(key=lambda key: locale.strxfrm(key[0]))
+                    for album in bd:
+                        data = album[1][1]
+                        cache_key = SongRecord(artist=data.artist, album=data.album, path=data.path)
+                        pb = self.library.artwork.get_pixbuf(cache_key)
+                        if pb:
+                            album[1][0] = pb
             # Now, songs not in albums:
             bd += self._get_data_songs(genre, artist, NOTAG, None)
         else:
@@ -511,9 +520,15 @@ class AlbumView(LibraryView):
                     display += " <span weight='light'>(%s)</span>" \
                             % misc.escape_html(year)
                 display += self.add_display_info(num_songs, playtime)
-                bd += [(misc.lower_no_the(album), [self.album_pixbuf, data,
-                                                   display])]
+
+                bd += [(misc.lower_no_the(album), [self.album_pixbuf, data, display])]
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
+        for album in bd:
+            data = album[1][1]
+            cache_key = SongRecord(artist=data.artist, album=data.album, path=data.path)
+            pb = self.library.artwork.get_pixbuf(cache_key)
+            if pb:
+                album[1][0] = pb
         self.cache = bd
         return bd
 
@@ -586,8 +601,6 @@ class GenreView(LibraryView):
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
         self.cache = bd
         return bd
-
-
 
 class Library:
     def __init__(self, config, mpd, artwork, TAB_LIBRARY, settings_save,
@@ -683,12 +696,13 @@ class Library:
                              self.on_library_button_press)
         self.library.connect('key-press-event', self.on_library_key_press)
         self.library.connect('query-tooltip', self.on_library_query_tooltip)
-        expanderwindow2.connect('scroll-event', self.on_library_scrolled)
         self.libraryview.connect('clicked', self.library_view_popup)
         self.searchtext.connect('key-press-event',
                                 self.libsearchfilter_key_pressed)
         self.searchtext.connect('activate', self.libsearchfilter_on_enter)
         self.searchbutton.connect('clicked', self.on_search_end)
+
+        self.artwork.art_thread.connect('art_ready', self.art_ready_cb)
 
         self.libfilter_changed_handler = self.searchtext.connect(
             'changed', self.libsearchfilter_feed_loop)
@@ -856,6 +870,7 @@ class Library:
         self.config.wd = wd = root
         self.library.freeze_child_notify()
         self.librarydata.clear()
+        self.view.invalidate_row_cache()
 
         # Populate treeview with data:
         bd = []
@@ -870,8 +885,17 @@ class Library:
                     break
                 wd = self.config.wd
 
-        for _sort, path in bd:
+        for index, (_sort, path) in enumerate(bd):
             self.librarydata.append(path)
+            data = path[1]
+            cache_key = SongRecord(artist=data.artist, album=data.album,
+                                   path=data.path)
+            if cache_key in self.artwork.cache:
+                pb = self.artwork.get_pixbuf(cache_key)
+                if pb:
+                    self.set_pb_for_row(index, pb)
+                
+            self.view.data_rows[cache_key] = index
 
         self.library.thaw_child_notify()
 
@@ -884,10 +908,25 @@ class Library:
             self.library_retain_selection(prev_selection, prev_selection_root,
                                           prev_selection_parent)
 
+        #XXX
         # Update library artwork as necessary
-        self.on_library_scrolled(None, None)
+        #self.on_library_scrolled(None, None)
 
         self.update_breadcrumbs()
+
+    def set_pb_for_row(self, row, pb):
+        i = self.librarydata.get_iter((row,))
+        self.librarydata.set_value(i, 0, pb)
+
+
+    def art_ready_cb(self, widget, data):
+        if not data in self.view.data_rows:
+            return
+        pb = self.artwork.get_pixbuf(data)
+        if pb:
+            # lookup for existing row
+            row = self.view.data_rows[data]
+            self.set_pb_for_row(row, pb)
 
     def update_breadcrumbs(self):
         # remove previous buttons

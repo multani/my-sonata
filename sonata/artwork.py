@@ -2,8 +2,9 @@ import logging
 import os
 import shutil
 import threading # artwork_update starts a thread _artwork_update
+from queue import PriorityQueue
 
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, GObject
 
 from sonata import img, ui, misc, consts, mpdhelper as mpdh
 from sonata import library
@@ -11,6 +12,58 @@ from sonata.pluginsystem import pluginsystem
 
 
 logger = logging.getLogger(__name__)
+
+class ArtworkThread(threading.Thread, GObject.GObject):
+    # We add a custom signal here, to emit the key (a SongRecord) for lookup by
+    # signal consumers of the cache
+    __gsignals__ = {
+        'art_ready': (GObject.SIGNAL_RUN_FIRST, None, (GObject.TYPE_PYOBJECT,))
+    }
+    def __init__(self, artwork, art_queue):
+        GObject.GObject.__init__(self)
+        threading.Thread.__init__(self)
+        self.artwork = artwork
+        self.art_queue = art_queue
+
+    def run(self):
+        while True:
+            # Will block this thread until something is in the queue
+            data = self.art_queue.get()[1]
+            logger.info("Artwork thread getting art for {} from {}".format(
+                data.artist, data.album))
+            # Check if it's in the cache; due to an inability to easily replace
+            # tasks in the queue to change their priority, we may have handled
+            # the task with a higher priority already
+            try:
+                if self.artwork.get_cached_filename(data) is not None:
+                    self.art_queue.task_done()
+                    continue
+            except KeyError:
+                pass
+
+            # Look for a local file
+            loc_type, filename = self.artwork.artwork_get_local_image(
+                data.path, data.artist, data.album)
+            if not filename:
+                # Try remote
+                filename = self.artwork.target_image_filename(None, data.path,
+                                                              data.artist,
+                                                              data.album)
+                self.artwork.artwork_download_img_to_file(data.artist,
+                                                          data.album,
+                                                          filename)
+                loc_type, filename = self.artwork.artwork_get_local_image(
+                    data.path, data.artist, data.album)
+
+            if filename:
+                self.artwork.cache[data] = filename
+            else:
+                self.artwork.cache[data] = None
+
+            self.emit('art_ready', data)
+
+            # Will notify that the item has been done
+            self.art_queue.task_done()
 
 
 class Artwork:
@@ -66,13 +119,14 @@ class Artwork:
         self.misc_img_in_dir = None
         self.stop_art_update = False
         self.downloading_image = False
-        self.lib_art_cond = None
+
+        self.art_queue = None
+        self.art_thread = None
+        self.art_queued = {}
+        self.artwork_thread_init()
 
         # local artwork, cache for library
-        self.lib_model = None
-        self.lib_art_rows_local = []
-        self.lib_art_rows_remote = []
-        self.lib_art_pb_size = 0
+        self.lib_art_pb_size = consts.LIB_COVER_SIZE
         self.cache = {}
 
         self.artwork_load_cache()
@@ -123,138 +177,53 @@ class Artwork:
     def artwork_is_downloading_image(self):
         return self.downloading_image
 
-    def library_artwork_init(self, model, pb_size):
+    def artwork_thread_init(self):
+        self.art_queue = PriorityQueue()
+        self.art_thread = ArtworkThread(self, self.art_queue)
+        self.art_thread.daemon = True
+        self.art_thread.start()
 
-        self.lib_model = model
-        self.lib_art_pb_size = pb_size
+    def get_cached_filename(self, cache_key):
+        try:
+            filename = self.cache[cache_key]
+            if not os.path.exists(filename):
+                del self.cache[cache_key]
+                return None
+            return filename
+        except:
+            return None
 
-        self.lib_art_cond = threading.Condition()
-        thread = threading.Thread(target=self._library_artwork_update)
-        thread.daemon = True
-        thread.start()
-
-    def library_artwork_update(self, model, start_row, end_row, albumpb):
-        self.albumpb = albumpb
-
-        # Update self.lib_art_rows_local with new rows followed
-        # by the rest of the rows.
-        self.lib_art_cond.acquire()
-        self.lib_art_rows_local = []
-        self.lib_art_rows_remote = []
-        start = start_row.get_indices()[0]
-        end = end_row.get_indices()[0]
-        test_rows = list(range(start, end + 1)) + list(range(len(model)))
-        for row in test_rows:
-            i = model.get_iter((row,))
-            icon = model.get_value(i, 0)
-            if icon == self.albumpb:
-                data = model.get_value(i, 1)
-                self.lib_art_rows_local.append((i, data, icon))
-        self.lib_art_cond.notifyAll()
-        self.lib_art_cond.release()
-
-    def _library_artwork_update(self):
-
-        while True:
-            remote_art = False
-
-            # Wait for items..
-            self.lib_art_cond.acquire()
-            while(len(self.lib_art_rows_local) == 0 and \
-                  len(self.lib_art_rows_remote) == 0):
-                self.lib_art_cond.wait()
-            self.lib_art_cond.release()
-
-            # Try first element, giving precedence to local queue:
-            if len(self.lib_art_rows_local) > 0:
-                i, data, icon = self.lib_art_rows_local[0]
-                remote_art = False
-            elif len(self.lib_art_rows_remote) > 0:
-                i, data, icon = self.lib_art_rows_remote[0]
-                remote_art = True
-            else:
-                i = None
-
-            # FIXME this can segfault (on iter_is_valid)
-            if i is not None and self.lib_model.iter_is_valid(i):
-
-                if data.artist is None or data.album is None:
-                    if remote_art:
-                        self.lib_art_rows_remote.pop(0)
-                    else:
-                        self.lib_art_rows_local.pop(0)
-
-                cache_key = library.SongRecord(artist=data.artist,
-                                               album=data.album,
-                                               path=data.path)
-
-                # Try to replace default icons with cover art:
-                pb = self.get_library_artwork_cached_pb(cache_key, None)
-
-                if pb is not None and not remote_art:
-                    # Continue to rescan for local artwork if we are
-                    # displaying the default album image, in case the user
-                    # has added a local image since we first scanned.
-                    filename = self.get_library_artwork_cached_filename(
-                        cache_key)
-                    if os.path.basename(filename) == os.path.basename(
-                        self.album_filename):
-                        pb = None
-
-                filename = None
-
-                # No cached pixbuf, try local/remote search:
-                if pb is None:
-                    if not remote_art:
-                        pb, filename = self.library_get_album_cover(data.path,
-                                                        data.artist, data.album,
+    def get_pixbuf(self, cache_key, priority=10):
+        filename = self.get_cached_filename(cache_key)
+        if filename:
+            pb = GdkPixbuf.Pixbuf.new_from_file_at_size(filename,
+                                                        self.lib_art_pb_size,
                                                         self.lib_art_pb_size)
-                    else:
-                        filename = self.target_image_filename(None, data.path,
-                                                              data.artist, data.album)
-                        self.artwork_download_img_to_file(data.artist, data.album,
-                                                          filename)
-                        pb, filename = self.library_get_album_cover(data.path,
-                                                            data.artist, data.album,
-                                                        self.lib_art_pb_size)
+            return self.artwork_apply_composite_case(pb,
+                                                     self.lib_art_pb_size,
+                                                     self.lib_art_pb_size)
+        # None available, add it to the queue
+        if not cache_key in self.art_queued:
+            self.art_queued[cache_key] = priority
+            self.art_queue.put((priority, cache_key))
+        return None
 
-                # Set pixbuf icon in model; add to cache
-                if pb is not None:
-                    if filename is not None:
-                        self.set_library_artwork_cached_filename(cache_key,
-                                                                 filename)
-                        GLib.idle_add(self.library_set_cover, i, pb, data)
+    def get_cover(self, dirname, artist, album, pb_size):
+        _tmp, coverfile = self.artwork_get_local_image(dirname, artist, album)
+        if not coverfile:
+            return (None, None)
 
-                # Remote processed item from queue:
-                if not remote_art:
-                    if len(self.lib_art_rows_local) > 0 and \
-                       (i, data, icon) == self.lib_art_rows_local[0]:
-                        self.lib_art_rows_local.pop(0)
-                        if pb is None and self.config.covers_pref == \
-                           consts.ART_LOCAL_REMOTE:
-                            # No local art found, add to remote queue for later
-                            self.lib_art_rows_remote.append((i, data, icon))
-                else:
-                    if len(self.lib_art_rows_remote) > 0 and \
-                       (i, data, icon) == self.lib_art_rows_remote[0]:
-                        self.lib_art_rows_remote.pop(0)
-                        if pb is None:
-                            # No remote art found, store self.albumpb
-                            # filename in cache
-                            self.set_library_artwork_cached_filename(cache_key,
-                                                        self.album_filename)
-
-    def library_set_image_for_current_song(self, cache_key):
-        # Search through the rows in the library to see
-        # if we match the currently playing song:
-        if cache_key.artist is None and cache_key.album is None:
-            return
-        for row in self.lib_model:
-            if str(cache_key.artist).lower() == str(row[1].artist).lower() \
-            and str(cache_key.album).lower() == str(row[1].album).lower():
-                pb = self.get_library_artwork_cached_pb(cache_key, None)
-                if pb:
-                    self.lib_model.set_value(row.iter, 0, pb)
+        try:
+            coverpb = GdkPixbuf.Pixbuf.new_from_file_at_size(coverfile,
+                                                        pb_size, pb_size)
+        except:
+            # Delete bad image:
+            misc.remove_file(coverfile)
+            return (None, None)
+        w = coverpb.get_width()
+        h = coverpb.get_height()
+        coverpb = self.artwork_apply_composite_case(coverpb, w, h)
+        return (coverpb, coverfile)
 
     def library_set_cover(self, i, pb, data):
         if self.lib_model.iter_is_valid(i):
@@ -277,6 +246,7 @@ class Artwork:
             return (coverpb, coverfile)
         return (None, None)
 
+    #XXX
     def set_library_artwork_cached_filename(self, cache_key, filename):
         self.cache[cache_key] = filename
 
@@ -455,12 +425,13 @@ class Artwork:
 
         self.lastalbumart = None
 
+        #XXX
         # Also, update row in library:
         if artist is not None:
             cache_key = library.SongRecord(artist=artist, album=album, path=path)
             self.set_library_artwork_cached_filename(cache_key,
                                                      self.album_filename)
-            GLib.idle_add(self.library_set_image_for_current_song, cache_key)
+
 
     def artwork_get_misc_img_in_path(self, songdir):
         path = os.path.join(self.config.musicdir[self.config.profile_num],
@@ -493,6 +464,7 @@ class Artwork:
                 self.currentpb = pix
 
                 if not info_img_only:
+                    #XXX
                     # Store in cache
                     cache_key = library.SongRecord(artist=artist, album=album,
                                                  path=path)
@@ -507,9 +479,6 @@ class Artwork:
                     self.albumimage.set_from_pixbuf(pix1)
                     self.artwork_set_tooltip_art(pix1)
                     del pix1
-
-                    # Artwork for library, if current song matches:
-                    self.library_set_image_for_current_song(cache_key)
 
                     # Artwork for fullscreen
                     self.fullscreen_cover_art_set_image()

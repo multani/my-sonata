@@ -770,8 +770,6 @@ class Base:
 
         # Initialize library data and widget
         self.librarydata = self.library.get_model()
-        self.artwork.library_artwork_init(self.librarydata,
-                                          consts.LIB_COVER_SIZE)
 
         icon = self.window.render_icon('sonata', Gtk.IconSize.DIALOG)
         self.window.set_icon(icon)
@@ -1197,8 +1195,6 @@ class Base:
             if self.current.sel_rows:
                 for row in self.current.sel_rows:
                     treeselection.select_path(row)
-        # Update lib artwork
-        self.library.on_library_scrolled(None, None)
 
     def on_library_button_press(self, widget, event):
         if self.on_button_press(widget, event, False):
