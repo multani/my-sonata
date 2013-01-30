@@ -1124,26 +1124,24 @@ class Library:
             pb = model.get_value(i, 0)
             data = model.get_value(i, 1)
             value = model.get_value(i, 2)
-            if value != ".." and value != "/":
-                if data.path is not None and data.album is None and data.artist is None and \
-                   data.year is None and data.genre is None:
-                    if pb == self.sonatapb:
-                        # File
-                        items.append(data.path)
-                    else:
-                        # Directory
-                        if not return_root:
-                            items += self.library_get_path_files_recursive(
-                                data.path)
-                        else:
-                            items.append(data.path)
+            meta_parts = [data.album, data.artist, data.year, data.genre]
+            meta = any([False if part is None for part in meta_parts else True])
+            if data.path is not None and not any(meta_parts):
+                if pb == self.sonatapb:
+                    # File
+                    items.append(data.path)
+                elif not return_root:
+                    # Directory without root
+                    items += self.library_get_path_files_recursive(data.path)
                 else:
-                    results, _playtime, _num_songs = \
-                            self.search.get_search_items(
-                                genre=data.genre, artist=data.artist, album=data.album,
-                                year=data.year)
-                    for item in results:
-                        items.append(item.file)
+                    # Full Directory
+                    items.append(data.path)
+            else:
+                results, _playtime, _num_songs = self.search.get_search_items(
+                    genre=data.genre, artist=data.artist, album=data.album,
+                    year=data.year)
+                for item in results:
+                    items.append(item.file)
         # Make sure we don't have any EXACT duplicates:
         items = misc.remove_list_duplicates(items, case=True)
         return items
