@@ -313,47 +313,26 @@ class LibraryView(object):
         elif artist is not None and album is None:
             # Albums/songs within an artist and possibly genre
             # Albums first:
-            if genre is not None:
-                albums = self.library.search.get_list_items('album',
-                                                            genre=genre,
-                                                            artist=artist)
-            else:
-                albums = self.library.search.get_list_items('album',
-                                                            artist=artist)
+            albums = self.library.search.get_list_items('album',
+                                                        genre=genre,
+                                                        artist=artist)
             for album in albums:
-                if genre is not None:
-                    years = self.library.search.get_list_items(
-                        'date', genre=genre, artist=artist, album=album)
-                else:
-                    years = self.library.search.get_list_items('date',
-                                                               artist=artist,
-                                                               album=album)
+                years = self.library.search.get_list_items('date', genre=genre,
+                                                           artist=artist,
+                                                           album=album)
                 if not NOTAG in years:
                     years.append(NOTAG)
                 for year in years:
-                    if genre is not None:
-                        playtime, num_songs = self.library.search.get_count(
-                            genre=genre, artist=artist, album=album, year=year)
-                        if num_songs > 0:
-                            files = self.library.search.get_list_items(
-                                'file', genre=genre, artist=artist,
-                                album=album, year=year)
-                            path = os.path.dirname(files[0])
-                            data = SongRecord(genre=genre, artist=artist,
-                                              album=album, year=year,
-                                              path=path)
-                    else:
-                        playtime, num_songs = self.library.search.get_count(
-                            artist=artist, album=album, year=year)
-                        if num_songs > 0:
-                            files = self.library.search.get_list_items('file',
-                                artist=artist, album=album, year=year)
-                            path = os.path.dirname(files[0])
-                        cache_data = SongRecord(artist=artist, album=album,
-                                                path=path)
-                        data = SongRecord(artist=artist, album=album,
-                                          year=year, path=path)
+                    playtime, num_songs = self.library.search.get_count(
+                        genre=genre, artist=artist, album=album, year=year)
                     if num_songs > 0:
+                        files = self.library.search.get_list_items(
+                            'file', genre=genre, artist=artist,
+                            album=album, year=year)
+                        path = os.path.dirname(files[0])
+                        data = SongRecord(genre=genre, artist=artist,
+                                          album=album, year=year,
+                                          path=path)
                         display = misc.escape_html(album)
                         if year and len(year) > 0 and year != NOTAG:
                             display += " <span weight='light'>(%s)</span>" \
