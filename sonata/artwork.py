@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import itertools
 import threading # artwork_update starts a thread _artwork_update
 from queue import PriorityQueue
 
@@ -28,9 +29,9 @@ class ArtworkThread(threading.Thread, GObject.GObject):
     def run(self):
         while True:
             # Will block this thread until something is in the queue
-            priority, data = self.art_queue.get()
-            logger.info("Artwork thread gets art for {} from {} ({})".format(
-                data.artist, data.album, priority))
+            priority, _count, data = self.art_queue.get()
+            logger.info("Artwork thread gets art for {} by {} ({})".format(
+                data.album, data.artist, priority))
             # Check if it's in the cache; due to an inability to easily replace
             # tasks in the queue to change their priority, we may have handled
             # the task with a higher priority already
@@ -120,6 +121,7 @@ class Artwork:
         self.stop_art_update = False
         self.downloading_image = False
 
+        self.art_counter = itertools.count()
         self.art_queue = None
         self.art_thread = None
         self.art_queued = {}
@@ -204,11 +206,14 @@ class Artwork:
                                                      self.lib_art_pb_size)
         # None available or better priority, add it to the queue
         if (not cache_key in self.art_queued or
-            self.art_queued[cache_key] > priority):
+                self.art_queued[cache_key] > priority):
             self.art_queued[cache_key] = priority
-            self.art_queue.put((priority, cache_key))
-            logger.info("Artwork thread queued up {} from {} ({})".format(
-                cache_key.artist, cache_key.album, priority))
+            # To keep the queue from re-sorting our entries that have the same
+            # priority, we add a monotonic count.
+            count = next(self.art_counter)
+            self.art_queue.put((priority, count, cache_key))
+            logger.info("Artwork thread queued up {} by {} ({})".format(
+                cache_key.album, cache_key.artist, priority))
 
         return None
 

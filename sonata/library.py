@@ -951,7 +951,7 @@ class Library:
         self.pixbuf_for_album_crumb(data)
         if not data in self.view.data_rows:
             return
-        pb = self.artwork.get_pixbuf(data, 9)
+        pb = self.artwork.get_pixbuf(data)
         if pb:
             # lookup for existing row
             row = self.view.data_rows[data]
