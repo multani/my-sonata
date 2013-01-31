@@ -272,7 +272,7 @@ class LibraryView(object):
                 cache_data = SongRecord(artist=self.library.config.wd.artist,
                                         album=self.library.config.wd.album,
                                         path=self.library.config.wd.path)
-                pb = self.library.artwork.get_pixbuf(cache_data)
+                pb = self.library.artwork.get_pixbuf(cache_data, priority=9)
                 if not pb:
                     icon = 'sonata-album'
             elif key == 'artist':
@@ -698,6 +698,7 @@ class Library:
         self.artistpb = self.library.render_icon('sonata-artist',
                                                  Gtk.IconSize.LARGE_TOOLBAR)
 
+        self.album_crumb = None
         self.view = None
         self.views = {}
         self.ACTION_TO_VIEW = {}
@@ -935,11 +936,22 @@ class Library:
         i = self.librarydata.get_iter((row,))
         self.librarydata.set_value(i, 0, pb)
 
+    def pixbuf_for_album_crumb(self, data=None, force=False):
+        if self.album_crumb:
+            cache_data = SongRecord(artist=self.config.wd.artist,
+                                    album=self.config.wd.album,
+                                    path=self.config.wd.path)
+            if force or cache_data == data:
+                pb = self.artwork.get_pixbuf(cache_data)
+                if pb:
+                    pb = pb.scale_simple(16, 16, GdkPixbuf.InterpType.HYPER)
+                    self.album_crumb.image.set_from_pixbuf(pb)
 
     def art_ready_cb(self, widget, data):
+        self.pixbuf_for_album_crumb(data)
         if not data in self.view.data_rows:
             return
-        pb = self.artwork.get_pixbuf(data)
+        pb = self.artwork.get_pixbuf(data, 9)
         if pb:
             # lookup for existing row
             row = self.view.data_rows[data]
@@ -960,7 +972,7 @@ class Library:
         if self.crumb_section_handler:
             self.crumb_section.disconnect(self.crumb_section_handler)
 
-
+        self.album_crumb = None
         crumbs = self.view.get_crumb_data()
 
         if not len(crumbs):
@@ -988,6 +1000,10 @@ class Library:
                 image = Gtk.Image.new_from_pixbuf(pb)
 
             b = breadcrumbs.CrumbButton(image, label)
+
+            if icon == 'sonata-album':
+                self.album_crumb = b
+                self.pixbuf_for_album_crumb(force=True)
 
             if crumb is crumbs[-1]:
                 # FIXME makes the button request minimal space:

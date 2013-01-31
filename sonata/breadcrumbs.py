@@ -11,6 +11,7 @@ class CrumbButton(Gtk.ToggleButton):
 
         self.set_properties(can_focus=False, relief=Gtk.ReliefStyle.NONE)
         self.label = label
+        self.image = image
 
         # adapt Gtk.Button internal layout code:
         hbox = Gtk.HBox(spacing=2)

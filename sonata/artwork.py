@@ -28,9 +28,9 @@ class ArtworkThread(threading.Thread, GObject.GObject):
     def run(self):
         while True:
             # Will block this thread until something is in the queue
-            data = self.art_queue.get()[1]
-            logger.info("Artwork thread getting art for {} from {}".format(
-                data.artist, data.album))
+            priority, data = self.art_queue.get()
+            logger.info("Artwork thread gets art for {} from {} ({})".format(
+                data.artist, data.album, priority))
             # Check if it's in the cache; due to an inability to easily replace
             # tasks in the queue to change their priority, we may have handled
             # the task with a higher priority already
@@ -202,10 +202,14 @@ class Artwork:
             return self.artwork_apply_composite_case(pb,
                                                      self.lib_art_pb_size,
                                                      self.lib_art_pb_size)
-        # None available, add it to the queue
-        if not cache_key in self.art_queued:
+        # None available or better priority, add it to the queue
+        if (not cache_key in self.art_queued or
+            self.art_queued[cache_key] > priority):
             self.art_queued[cache_key] = priority
             self.art_queue.put((priority, cache_key))
+            logger.info("Artwork thread queued up {} from {} ({})".format(
+                cache_key.artist, cache_key.album, priority))
+
         return None
 
     def get_cover(self, dirname, artist, album, pb_size):
