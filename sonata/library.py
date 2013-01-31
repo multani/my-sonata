@@ -21,8 +21,8 @@ def list_mark_various_artists_albums(albums):
         VA = False
         for j in range(1, consts.NUM_ARTISTS_FOR_VA):
             if (albums[i].album.lower() != albums[i + j].album.lower() or
-                albums[i].year  != albums[i + j].year or
-                albums[i].path  != albums[i + j].path):
+                    albums[i].year  != albums[i + j].year or
+                    albums[i].path  != albums[i + j].path):
                 break
             if albums[i].artist == albums[i + j].artist:
                 albums.pop(i + j)
@@ -34,7 +34,7 @@ def list_mark_various_artists_albums(albums):
             j = 1
             while i + j <= len(albums) - 1:
                 if (albums[i].album.lower() == albums[i + j].album.lower() and
-                    albums[i].year == albums[i + j].year):
+                        albums[i].year == albums[i + j].year):
                     albums.pop(i + j)
                 else:
                     break
@@ -164,9 +164,9 @@ class LibrarySearch(object):
                 match = True
                 # Ensure that if, e.g., "foo" is searched,
                 # "foobar" isn't returned too
-                for arg, arg_value in zip(args_tuple[::2], args_tuple[1::2]):
+                for arg, arg_val in zip(args_tuple[::2], args_tuple[1::2]):
                     if (arg in item and
-                        str(item.get(arg, '')).upper() != arg_value.upper()):
+                            str(item.get(arg, '')).upper() != arg_val.upper()):
                         match = False
                         break
                 if match:
@@ -520,7 +520,7 @@ class AlbumView(LibraryView):
                                   year=year, path=path)
                 display = misc.escape_html(album)
                 if (artist and year and len(artist) > 0 and len(year) > 0 and
-                    artist != NOTAG and year != NOTAG):
+                        artist != NOTAG and year != NOTAG):
                     display += " <span weight='light'>(%s, %s)</span>" \
                             % (misc.escape_html(artist),
                                misc.escape_html(year))
@@ -921,7 +921,7 @@ class Library:
         self.library.realize()
         GLib.idle_add(self.library_set_view, not path_updated)
         if (len(prev_selection) > 0 or prev_selection_root or
-            prev_selection_parent):
+                prev_selection_parent):
             # Retain pre-update selection:
             self.library_retain_selection(prev_selection, prev_selection_root,
                                           prev_selection_parent)
