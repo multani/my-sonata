@@ -292,72 +292,87 @@ class LibraryView(object):
     def _get_toplevel_data(self):
         pass
 
+    def _get_artists_data(self, genre=None):
+        bd = []
+        if genre is None:
+            return bd
+        artists = self.library.search.get_list_items('artist', genre=genre)
+        if len(artists) == 0:
+            return bd
+        if not NOTAG in artists:
+            artists.append(NOTAG)
+        for artist in artists:
+            playtime, num_songs = self.library.search.get_count(genre=genre,
+                                                                artist=artist)
+            if num_songs > 0:
+                display = misc.escape_html(artist)
+                display += self.add_display_info(num_songs, playtime)
+                data = SongRecord(genre=genre, artist=artist)
+                row_data = [self.library.artistpb, data, display]
+                bd += [(misc.lower_no_the(artist), row_data)]
+        return bd
+
+    def _get_albums_data(self, genre=None, artist=None):
+        bd = []
+        if artist is None:
+            return bd
+        albums = self.library.search.get_list_items('album', genre=genre,
+                                                    artist=artist)
+        # Albums first:
+        for album in albums:
+            years = self.library.search.get_list_items('date', genre=genre,
+                                                       artist=artist,
+                                                       album=album)
+            if not NOTAG in years:
+                years.append(NOTAG)
+            for year in years:
+                playtime, num_songs = self.library.search.get_count(
+                    genre=genre, artist=artist, album=album, year=year)
+                if num_songs > 0:
+                    files = self.library.search.get_list_items('file',
+                                                               genre=genre,
+                                                               artist=artist,
+                                                               album=album,
+                                                               year=year)
+                    path = os.path.dirname(files[0])
+                    data = SongRecord(genre=genre, artist=artist, album=album,
+                                      year=year, path=path)
+                    display = misc.escape_html(album)
+                    if year and len(year) > 0 and year != NOTAG:
+                        year_str = " <span weight='light'>({year})</span>"
+                        display += year_str.format(year=misc.escape_html(year))
+                    display += self.add_display_info(num_songs, playtime)
+                    ordered_year = year
+                    if ordered_year == NOTAG:
+                        ordered_year = '9999'
+                    row_data = [self.library.albumpb, data, display]
+                    bd += [(ordered_year + misc.lower_no_the(album), row_data)]
+                # Sort early to add pb in display order
+                bd.sort(key=lambda key: locale.strxfrm(key[0]))
+                for album in bd:
+                    data = album[1][1]
+                    cache_key = SongRecord(artist=data.artist, album=data.album,
+                                           path=data.path)
+                    pb = self.library.artwork.get_pixbuf(cache_key)
+                    if pb:
+                        album[1][0] = pb
+        # Now, songs not in albums:
+        bd += self._get_data_songs(genre, artist, NOTAG, None)
+        return bd
+
+
     def _get_data(self, genre=None, artist=None, album=None, year=None):
         # Create treeview model info
         bd = []
         if genre is not None and artist is None and album is None:
             # Artists within a genre
-            artists = self.library.search.get_list_items('artist', genre=genre)
-            if len(artists) > 0:
-                if not NOTAG in artists:
-                    artists.append(NOTAG)
-                for artist in artists:
-                    playtime, num_songs = self.library.search.get_count(
-                        genre=genre, artist=artist)
-                    if num_songs > 0:
-                        display = misc.escape_html(artist)
-                        display += self.add_display_info(num_songs, playtime)
-                        data = SongRecord(genre=genre, artist=artist)
-                        row_data = [self.library.artistpb, data, display]
-                        bd += [(misc.lower_no_the(artist), row_data)]
+            bd = self._get_artists_data(genre)
         elif artist is not None and album is None:
             # Albums/songs within an artist and possibly genre
-            # Albums first:
-            albums = self.library.search.get_list_items('album',
-                                                        genre=genre,
-                                                        artist=artist)
-            for album in albums:
-                years = self.library.search.get_list_items('date', genre=genre,
-                                                           artist=artist,
-                                                           album=album)
-                if not NOTAG in years:
-                    years.append(NOTAG)
-                for year in years:
-                    playtime, num_songs = self.library.search.get_count(
-                        genre=genre, artist=artist, album=album, year=year)
-                    if num_songs > 0:
-                        files = self.library.search.get_list_items(
-                            'file', genre=genre, artist=artist,
-                            album=album, year=year)
-                        path = os.path.dirname(files[0])
-                        data = SongRecord(genre=genre, artist=artist,
-                                          album=album, year=year,
-                                          path=path)
-                        display = misc.escape_html(album)
-                        if year and len(year) > 0 and year != NOTAG:
-                            display += " <span weight='light'>(%s)</span>" \
-                                    % misc.escape_html(year)
-                        display += self.add_display_info(num_songs, playtime)
-                        ordered_year = year
-                        if ordered_year == NOTAG:
-                            ordered_year = '9999'
-                        bd += [(ordered_year + misc.lower_no_the(album),
-                                [self.library.albumpb, data, display])]
-                    # Sort early to add pb in display order
-                    bd.sort(key=lambda key: locale.strxfrm(key[0]))
-                    for album in bd:
-                        data = album[1][1]
-                        cache_key = SongRecord(artist=data.artist,
-                                               album=data.album,
-                                               path=data.path)
-                        pb = self.library.artwork.get_pixbuf(cache_key)
-                        if pb:
-                            album[1][0] = pb
-            # Now, songs not in albums:
-            bd += self._get_data_songs(genre, artist, NOTAG, None)
+            bd = self._get_albums_data(genre=genre, artist=artist)
         else:
             # Songs within an album, artist, year, and possibly genre
-            bd += self._get_data_songs(genre, artist, album, year)
+            bd = self._get_data_songs(genre, artist, album, year)
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
         return bd
 
