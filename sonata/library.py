@@ -211,6 +211,9 @@ class LibraryView(object):
         self.cache = None
         self.data_rows = {}
         self.library = library
+        self.artwork = self.library.artwork
+        self.config = self.library.config
+        self.search = self.library.search
         self.song_icon = 'sonata'
         self.song_pixbuf = self.library.library.render_icon_pixbuf(
             self.song_icon, Gtk.IconSize.MENU)
@@ -269,10 +272,10 @@ class LibraryView(object):
             pb, icon = None, None
             if key == 'album':
                 # Album artwork, with self.alumbpb as a backup:
-                cache_data = SongRecord(artist=self.library.config.wd.artist,
-                                        album=self.library.config.wd.album,
-                                        path=self.library.config.wd.path)
-                pb = self.library.artwork.get_pixbuf(cache_data, priority=9)
+                cache_data = SongRecord(artist=self.config.wd.artist,
+                                        album=self.config.wd.album,
+                                        path=self.config.wd.path)
+                pb = self.artwork.get_pixbuf(cache_data, priority=9)
                 if not pb:
                     icon = 'sonata-album'
             elif key == 'artist':
@@ -285,8 +288,8 @@ class LibraryView(object):
     def get_crumb_data(self):
         keys = 'genre', 'artist', 'album'
         nkeys = 3
-        parts = (self.library.config.wd.genre, self.library.config.wd.artist,
-                 self.library.config.wd.album)
+        parts = (self.config.wd.genre, self.config.wd.artist,
+                 self.config.wd.album)
         return self._get_crumb_data(keys, nkeys, parts)
 
     def _get_toplevel_data(self):
@@ -296,14 +299,14 @@ class LibraryView(object):
         bd = []
         if genre is None:
             return bd
-        artists = self.library.search.get_list_items('artist', genre=genre)
+        artists = self.search.get_list_items('artist', genre=genre)
         if len(artists) == 0:
             return bd
         if not NOTAG in artists:
             artists.append(NOTAG)
         for artist in artists:
-            playtime, num_songs = self.library.search.get_count(genre=genre,
-                                                                artist=artist)
+            playtime, num_songs = self.search.get_count(genre=genre,
+                                                        artist=artist)
             if num_songs > 0:
                 display = misc.escape_html(artist)
                 display += self.add_display_info(num_songs, playtime)
@@ -316,24 +319,22 @@ class LibraryView(object):
         bd = []
         if artist is None:
             return bd
-        albums = self.library.search.get_list_items('album', genre=genre,
-                                                    artist=artist)
+        albums = self.search.get_list_items('album', genre=genre, artist=artist)
         # Albums first:
         for album in albums:
-            years = self.library.search.get_list_items('date', genre=genre,
-                                                       artist=artist,
-                                                       album=album)
+            years = self.search.get_list_items('date', genre=genre,
+                                               artist=artist, album=album)
             if not NOTAG in years:
                 years.append(NOTAG)
             for year in years:
-                playtime, num_songs = self.library.search.get_count(
-                    genre=genre, artist=artist, album=album, year=year)
+                playtime, num_songs = self.search.get_count(genre=genre,
+                                                            artist=artist,
+                                                            album=album,
+                                                            year=year)
                 if num_songs > 0:
-                    files = self.library.search.get_list_items('file',
-                                                               genre=genre,
-                                                               artist=artist,
-                                                               album=album,
-                                                               year=year)
+                    files = self.search.get_list_items('file', genre=genre,
+                                                       artist=artist,
+                                                       album=album, year=year)
                     path = os.path.dirname(files[0])
                     data = SongRecord(genre=genre, artist=artist, album=album,
                                       year=year, path=path)
@@ -353,7 +354,7 @@ class LibraryView(object):
                     data = album[1][1]
                     cache_key = SongRecord(artist=data.artist, album=data.album,
                                            path=data.path)
-                    pb = self.library.artwork.get_pixbuf(cache_key)
+                    pb = self.artwork.get_pixbuf(cache_key)
                     if pb:
                         album[1][0] = pb
         # Now, songs not in albums:
@@ -378,7 +379,7 @@ class LibraryView(object):
 
     def _get_data_songs(self, genre, artist, album, year):
         bd = []
-        songs, _playtime, _num_songs = self.library.search.get_search_items(
+        songs, _playtime, _num_songs = self.search.get_search_items(
             genre=genre, artist=artist, album=album, year=year)
 
         for song in songs:
@@ -386,7 +387,7 @@ class LibraryView(object):
             track = str(song.get('track', 99)).zfill(2)
             disc = str(song.get('disc', 99)).zfill(2)
             song_data = [self.library.sonatapb, data, formatting.parse(
-                self.library.config.libraryformat, song, True)]
+                self.config.libraryformat, song, True)]
             sort_data = 'f{disc}{track}'.format(disc=disc, track=track)
             try:
                 song_title = misc.lower_no_the(song.title)
@@ -412,7 +413,7 @@ class FilesystemView(LibraryView):
             Gtk.STOCK_OPEN, Gtk.IconSize.MENU)
 
     def get_crumb_data(self):
-        path = self.library.config.wd.path
+        path = self.config.wd.path
         crumbs = []
         if path and path != '/':
             parts = path.split('/')
@@ -450,7 +451,7 @@ class FilesystemView(LibraryView):
                 data = SongRecord(path=item['file'])
                 bd += [('f' + item['file'].lower(),
                         [self.song_pixbuf, data,
-                         formatting.parse(self.library.config.libraryformat,
+                         formatting.parse(self.config.libraryformat,
                                           item, True)])]
         bd.sort(key=operator.itemgetter(0))
         if path == '/':
@@ -475,7 +476,7 @@ class AlbumView(LibraryView):
         # We don't want to show an artist button in album view
         keys = 'genre', 'album'
         nkeys = 2
-        parts = (self.library.config.wd.genre, self.library.config.wd.album)
+        parts = (self.config.wd.genre, self.config.wd.album)
         return self._get_crumb_data(keys, nkeys, parts)
 
     def get_data(self, wd):
@@ -507,8 +508,8 @@ class AlbumView(LibraryView):
         bd = []
         for item in albums:
             album, artist, _genre, year, path = item
-            playtime, num_songs = self.library.search.get_count(
-                artist=artist, album=album, year=year)
+            playtime, num_songs = self.search.get_count(artist=artist,
+                                                        album=album, year=year)
             if num_songs > 0:
                 data = SongRecord(artist=artist, album=album,
                                   year=year, path=path)
@@ -530,7 +531,7 @@ class AlbumView(LibraryView):
             data = album[1][1]
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
-            pb = self.library.artwork.get_pixbuf(cache_key)
+            pb = self.artwork.get_pixbuf(cache_key)
             if pb:
                 album[1][0] = pb
         self.cache = bd
@@ -556,12 +557,12 @@ class ArtistView(LibraryView):
     def _get_toplevel_data(self):
         if self.cache is not None:
             return self.cache
-        items = self.library.search.get_list_items('artist')
+        items = self.search.get_list_items('artist')
         if not (NOTAG in items):
             items.append(NOTAG)
         bd = []
         for item in items:
-            playtime, num_songs = self.library.search.get_count(artist=item)
+            playtime, num_songs = self.search.get_count(artist=item)
             data = SongRecord(artist=item)
             if num_songs > 0:
                 display = misc.escape_html(item)
@@ -591,12 +592,12 @@ class GenreView(LibraryView):
     def _get_toplevel_data(self):
         if self.cache is not None:
             return self.cache
-        items = self.library.search.get_list_items('genre')
+        items = self.search.get_list_items('genre')
         if not (NOTAG in items):
             items.append(NOTAG)
         bd = []
         for item in items:
-            playtime, num_songs = self.library.search.get_count(genre=item)
+            playtime, num_songs = self.search.get_count(genre=item)
             data = SongRecord(genre=item)
             if num_songs > 0:
                 display = misc.escape_html(item)
