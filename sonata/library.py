@@ -513,17 +513,14 @@ class AlbumView(LibraryView):
                 data = SongRecord(artist=artist, album=album,
                                   year=year, path=path)
                 display = misc.escape_html(album)
-                if (artist and year and len(artist) > 0 and len(year) > 0 and
-                        artist != NOTAG and year != NOTAG):
-                    display += " <span weight='light'>(%s, %s)</span>" \
-                            % (misc.escape_html(artist),
-                               misc.escape_html(year))
-                elif artist and len(artist) > 0 and artist != NOTAG:
-                    display += " <span weight='light'>(%s)</span>" \
-                            % misc.escape_html(artist)
-                elif year and len(year) > 0 and year != NOTAG:
-                    display += " <span weight='light'>(%s)</span>" \
-                            % misc.escape_html(year)
+                disp_str = " <span weight='light'>({meta_strs})</span>"
+                meta_strs = []
+                if artist and len(artist) > 0 and artist != NOTAG:
+                    meta_strs.append(artist)
+                if year and len(year) > 0 and year != NOTAG:
+                    meta_strs.append(year)
+                if len(meta_strs):
+                    display += disp_str.format(meta_strs=", ".join(meta_strs))
                 display += self.add_display_info(num_songs, playtime)
                 row_data = [self.album_pixbuf, data, display]
 
