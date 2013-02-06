@@ -349,15 +349,15 @@ class LibraryView(object):
                         ordered_year = '9999'
                     row_data = [self.library.albumpb, album_data, display]
                     bd += [(ordered_year + misc.lower_no_the(album), row_data)]
-                # Sort early to add pb in display order FIXME
-                bd.sort(key=lambda key: locale.strxfrm(key[0]))
-                for album_row in bd:
-                    data = album_row[1][1]
-                    cache_key = SongRecord(artist=data.artist, album=data.album,
-                                           path=data.path)
-                    pb = self.artwork.get_pixbuf(cache_key)
-                    if pb:
-                        album_row[1][0] = pb
+        # Sort early to add pb in display order
+        bd.sort(key=lambda key: locale.strxfrm(key[0]))
+        for album_row in bd:
+            data = album_row[1][1]
+            cache_key = SongRecord(artist=data.artist, album=data.album,
+                                   path=data.path)
+            pb = self.artwork.get_pixbuf(cache_key)
+            if pb:
+                album_row[1][0] = pb
         # Now, songs not in albums:
         non_albums = SongRecord(genre=song_record.genre,
                                 artist=song_record.artist,
