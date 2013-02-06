@@ -2205,8 +2205,9 @@ class Base:
         # the tracks.
         datalist = []
         album = self.songinfo.album or ''
-        songs, _playtime, _num_songs = \
-                self.library.search.get_search_items(album=album)
+        album_data = SongRecord(album=album)
+        songs, _playtime, _num_songs = self.library.search.get_search_items(
+            album_data)
         for song in songs:
             year = song.date or ''
             artist = song.artist or ''
