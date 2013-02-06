@@ -217,6 +217,20 @@ class LibraryView(object):
         self.artwork = self.library.artwork
         self.config = self.library.config
         self.search = self.library.search
+
+        self.artist_icon = 'sonata-artist'
+        self.artist_pixbuf = self.library.library.render_icon_pixbuf(
+            self.artist_icon, Gtk.IconSize.LARGE_TOOLBAR)
+        self.album_icon = 'sonata-album'
+        self.album_pixbuf = self.library.library.render_icon_pixbuf(
+            self.album_icon, Gtk.IconSize.LARGE_TOOLBAR)
+        self.genre_icon = Gtk.STOCK_ORIENTATION_PORTRAIT
+        self.genre_pixbuf = self.library.library.render_icon_pixbuf(
+            self.genre_icon, Gtk.IconSize.LARGE_TOOLBAR)
+
+        self.folder_icon = Gtk.STOCK_HARDDISK
+        self.folder_pixbuf = self.library.library.render_icon_pixbuf(
+            Gtk.STOCK_OPEN, Gtk.IconSize.MENU)
         self.song_icon = 'sonata'
         self.song_pixbuf = self.library.library.render_icon_pixbuf(
             self.song_icon, Gtk.IconSize.MENU)
@@ -274,17 +288,17 @@ class LibraryView(object):
             target = SongRecord(**partdata)
             pb, icon = None, None
             if key == 'album':
-                # Album artwork, with self.alumbpb as a backup:
+                # Album artwork, with self.album_icon as a backup:
                 cache_data = SongRecord(artist=self.config.wd.artist,
                                         album=self.config.wd.album,
                                         path=self.config.wd.path)
                 pb = self.artwork.get_pixbuf(cache_data, priority=9)
                 if not pb:
-                    icon = 'sonata-album'
+                    icon = self.album_icon
             elif key == 'artist':
-                icon = 'sonata-artist'
+                icon = self.artist_icon
             else:
-                icon = Gtk.STOCK_ORIENTATION_PORTRAIT
+                icon = self.genre_icon
             crumbs.append((part, icon, pb, target))
         return crumbs
 
@@ -313,7 +327,7 @@ class LibraryView(object):
             if num_songs > 0:
                 display = misc.escape_html(artist)
                 display += self.add_display_info(num_songs, playtime)
-                row_data = [self.library.artistpb, artist_data, display]
+                row_data = [self.artist_pixbuf, artist_data, display]
                 bd += [(misc.lower_no_the(artist), row_data)]
         return bd
 
@@ -347,7 +361,7 @@ class LibraryView(object):
                     ordered_year = year
                     if ordered_year == NOTAG:
                         ordered_year = '9999'
-                    row_data = [self.library.albumpb, album_data, display]
+                    row_data = [self.album_pixbuf, album_data, display]
                     bd += [(ordered_year + misc.lower_no_the(album), row_data)]
         # Sort early to add pb in display order
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
@@ -391,7 +405,7 @@ class LibraryView(object):
             data = SongRecord(path=song.file)
             track = str(song.get('track', 99)).zfill(2)
             disc = str(song.get('disc', 99)).zfill(2)
-            song_data = [self.library.sonatapb, data, formatting.parse(
+            song_data = [self.song_pixbuf, data, formatting.parse(
                 self.config.libraryformat, song, True)]
             sort_data = 'f{disc}{track}'.format(disc=disc, track=track)
             try:
@@ -411,10 +425,8 @@ class FilesystemView(LibraryView):
         LibraryView.__init__(self, library)
         self.view_type = consts.VIEW_FILESYSTEM
         self.name = 'filesystem'
-        self.icon = Gtk.STOCK_HARDDISK
+        self.icon = self.folder_icon
         self.label = _("Filesystem")
-        self.folder_pixbuf = self.library.library.render_icon_pixbuf(
-            Gtk.STOCK_OPEN, Gtk.IconSize.MENU)
 
     def get_crumb_data(self):
         path = self.config.wd.path
@@ -470,10 +482,8 @@ class AlbumView(LibraryView):
         LibraryView.__init__(self, library)
         self.view_type = consts.VIEW_ALBUM
         self.name = 'album'
-        self.icon = 'sonata-album'
+        self.icon = self.album_icon
         self.label = _("Albums")
-        self.album_pixbuf = self.library.library.render_icon_pixbuf(
-            self.icon, Gtk.IconSize.LARGE_TOOLBAR)
 
     def get_crumb_data(self):
         # We don't want to show an artist button in album view
@@ -543,10 +553,8 @@ class ArtistView(LibraryView):
         LibraryView.__init__(self, library)
         self.view_type = consts.VIEW_ARTIST
         self.name = 'artist'
-        self.icon = 'sonata-artist'
+        self.icon = self.artist_icon
         self.label = _("Artists")
-        self.artist_pixbuf = self.library.library.render_icon_pixbuf(
-            self.icon, Gtk.IconSize.LARGE_TOOLBAR)
 
     def get_data(self, song_record):
         if song_record.artist is None and song_record.album is None:
@@ -572,15 +580,14 @@ class ArtistView(LibraryView):
         self.cache = bd
         return bd
 
+
 class GenreView(LibraryView):
     def __init__(self, library):
         LibraryView.__init__(self, library)
         self.view_type = consts.VIEW_GENRE
         self.name = 'genre'
-        self.icon = Gtk.STOCK_ORIENTATION_PORTRAIT
+        self.icon = self.genre_icon
         self.label = _("Genres")
-        self.genre_pixbuf = self.library.library.render_icon_pixbuf(
-            self.icon, Gtk.IconSize.LARGE_TOOLBAR)
 
     def get_data(self, song_record):
         if song_record.genre is None:
