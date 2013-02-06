@@ -218,6 +218,12 @@ class LibraryView(object):
         self.config = self.library.config
         self.search = self.library.search
 
+        self.TYPE_ALBUM = 'album'
+        self.TYPE_ARTIST = 'artist'
+        self.TYPE_FOLDER = 'folder'
+        self.TYPE_GENRE = 'genre'
+        self.TYPE_SONG = 'song'
+
         self.artist_icon = 'sonata-artist'
         self.artist_pixbuf = self.library.library.render_icon_pixbuf(
             self.artist_icon, Gtk.IconSize.LARGE_TOOLBAR)
@@ -327,7 +333,8 @@ class LibraryView(object):
             if num_songs > 0:
                 display = misc.escape_html(artist)
                 display += self.add_display_info(num_songs, playtime)
-                row_data = [self.artist_pixbuf, artist_data, display]
+                row_data = [self.artist_pixbuf, artist_data, display,
+                            self.TYPE_ARTIST]
                 bd += [(misc.lower_no_the(artist), row_data)]
         return bd
 
@@ -361,7 +368,8 @@ class LibraryView(object):
                     ordered_year = year
                     if ordered_year == NOTAG:
                         ordered_year = '9999'
-                    row_data = [self.album_pixbuf, album_data, display]
+                    row_data = [self.album_pixbuf, album_data, display,
+                                self.TYPE_ALBUM]
                     bd += [(ordered_year + misc.lower_no_the(album), row_data)]
         # Sort early to add pb in display order
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
@@ -405,8 +413,10 @@ class LibraryView(object):
             data = SongRecord(path=song.file)
             track = str(song.get('track', 99)).zfill(2)
             disc = str(song.get('disc', 99)).zfill(2)
-            song_data = [self.song_pixbuf, data, formatting.parse(
-                self.config.libraryformat, song, True)]
+            song_data = [self.song_pixbuf, data,
+                         formatting.parse(self.config.libraryformat,
+                                          song, True),
+                         self.TYPE_SONG]
             sort_data = 'f{disc}{track}'.format(disc=disc, track=track)
             try:
                 song_title = misc.lower_no_the(song.title)
@@ -463,13 +473,15 @@ class FilesystemView(LibraryView):
                 name = os.path.basename(file_info['directory'])
                 dir_data = SongRecord(path=file_info["directory"])
                 row_data = [self.folder_pixbuf, dir_data,
-                            misc.escape_html(name)]
+                            misc.escape_html(name),
+                            self.TYPE_FOLDER]
                 bd += [('d' + str(name).lower(), row_data)]
             elif 'file' in file_info:
                 file_data = SongRecord(path=file_info['file'])
                 row_disp = formatting.parse(self.config.libraryformat,
                                             file_info, True)
-                row_data = [self.song_pixbuf, file_data, row_disp]
+                row_data = [self.song_pixbuf, file_data, row_disp,
+                            self.TYPE_SONG]
                 bd += [('f' + file_info['file'].lower(), row_data)]
         bd.sort(key=operator.itemgetter(0))
         if path == '/':
@@ -533,8 +545,8 @@ class AlbumView(LibraryView):
                 if len(meta_strs):
                     display += disp_str.format(meta_strs=", ".join(meta_strs))
                 display += self.add_display_info(num_songs, playtime)
-                row_data = [self.album_pixbuf, album_data, display]
-
+                row_data = [self.album_pixbuf, album_data, display,
+                            self.TYPE_ALBUM]
                 bd += [(misc.lower_no_the(album_data.album), row_data)]
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
         for album in bd:
@@ -574,7 +586,8 @@ class ArtistView(LibraryView):
             if num_songs > 0:
                 display = misc.escape_html(artist)
                 display += self.add_display_info(num_songs, playtime)
-                row_data = [self.artist_pixbuf, artist_data, display]
+                row_data = [self.artist_pixbuf, artist_data, display,
+                            self.TYPE_ARTIST]
                 bd += [(misc.lower_no_the(artist), row_data)]
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
         self.cache = bd
@@ -607,7 +620,8 @@ class GenreView(LibraryView):
             if num_songs > 0:
                 display = misc.escape_html(genre)
                 display += self.add_display_info(num_songs, playtime)
-                row_data = [self.genre_pixbuf, genre_data, display]
+                row_data = [self.genre_pixbuf, genre_data, display,
+                            self.TYPE_GENRE]
                 bd += [(misc.lower_no_the(genre), row_data)]
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
         self.cache = bd
@@ -731,7 +745,7 @@ class Library:
         self.searchcombo.set_active(self.config.last_search_num)
         self.searchcombo.handler_unblock(searchcombo_changed_handler)
         self.librarydata = Gtk.ListStore(GdkPixbuf.Pixbuf,
-                                         GObject.TYPE_PYOBJECT, str)
+                                         GObject.TYPE_PYOBJECT, str, str)
         self.library.set_model(self.librarydata)
         self.library.set_search_column(2)
         self.librarycell = Gtk.CellRendererText()
@@ -1105,9 +1119,10 @@ class Library:
                 path = selected[0]
             else:
                 return
-        value = self.librarydata.get_value(self.librarydata.get_iter(path), 1)
-        icon = self.librarydata.get_value(self.librarydata.get_iter(path), 0)
-        if icon == self.sonatapb:
+        row_iter = self.librarydata.get_iter(path)
+        value = self.librarydata.get_value(row_iter, 1)
+        row_type = self.librarydata.get_value(row_iter, 3)
+        if row_type == self.view.TYPE_SONG:
             # Song found, add item
             self.on_add_item(self.library)
         else:
@@ -1150,14 +1165,14 @@ class Library:
         items = []
         model, rows = self.library_selection.get_selected_rows()
         for path in rows:
-            i = model.get_iter(path)
-            pb = model.get_value(i, 0)
-            data = model.get_value(i, 1)
-            value = model.get_value(i, 2)
+            row_iter = model.get_iter(path)
+            data = model.get_value(row_iter, 1)
+            value = model.get_value(row_iter, 2)
+            row_type = model.get_value(row_iter, 3)
             meta_parts = [data.album, data.artist, data.year, data.genre]
             meta = any([part is None for part in meta_parts])
             if data.path is not None and not any(meta_parts):
-                if pb == self.sonatapb:
+                if row_type == self.view.TYPE_SONG:
                     # File
                     items.append(data.path)
                 elif not return_root:
@@ -1337,7 +1352,8 @@ class Library:
         currlen = len(self.librarydata)
         bd = [(self.sonatapb,
                SongRecord(path=item['file']),
-               formatting.parse(self.config.libraryformat, item, True))
+               formatting.parse(self.config.libraryformat, item, True),
+               self.view.TYPE_SONG)
               for item in matches if 'file' in item]
         bd.sort(key=lambda key: locale.strxfrm(key[2]))
         for i, item in enumerate(bd):
