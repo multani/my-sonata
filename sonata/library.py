@@ -802,7 +802,6 @@ class GenreView(LibraryView):
 
 class Library:
     def __init__(self, config, mpd, artwork, TAB_LIBRARY, settings_save,
-                 filtering_entry_make_red, filtering_entry_revert_color,
                  filter_key_pressed, on_add_item, connected,
                  on_library_button_press, add_tab, get_multicd_album_root_dir):
         self.artwork = artwork
@@ -810,8 +809,6 @@ class Library:
         self.mpd = mpd
         self.librarymenu = None # cyclic dependency, set later
         self.settings_save = settings_save
-        self.filtering_entry_make_red = filtering_entry_make_red
-        self.filtering_entry_revert_color = filtering_entry_revert_color
         self.filter_key_pressed = filter_key_pressed
         self.on_add_item = on_add_item
         self.connected = connected
@@ -1418,7 +1415,7 @@ class Library:
             self.search.cleanup_search()
             # Restore the regular view
             GLib.idle_add(self.library_browse, None, self.config.wd)
-            GLib.idle_add(self.filtering_entry_revert_color, self.searchtext)
+            GLib.idle_add(ui.reset_entry_marking, self.searchtext)
             if move_focus:
                 self.library.grab_focus()
 
@@ -1431,11 +1428,11 @@ class Library:
             self.librarydata.append(row)
         self.library.thaw_child_notify()
         if len(bd) == 0:
-            GLib.idle_add(self.filtering_entry_make_red, self.searchtext)
+            GLib.idle_add(ui.set_entry_invalid, self.searchtext)
         else:
             GLib.idle_add(self.library.set_cursor, Gtk.TreePath.new_first(),
                           None, False)
-            GLib.idle_add(self.filtering_entry_revert_color, self.searchtext)
+            GLib.idle_add(ui.reset_entry_marking, self.searchtext)
 
     def on_search_key_pressed(self, widget, event):
         self.filter_key_pressed(widget, event, self.library)
@@ -1445,7 +1442,4 @@ class Library:
 
     def search_set_focus(self):
         GLib.idle_add(self.searchtext.grab_focus)
-
-    def search_get_style(self):
-        return self.searchtext.get_style()
 

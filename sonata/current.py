@@ -7,8 +7,7 @@ Example usage:
 import current
 self.current = current.Current(self.config, self.client, self.TAB_CURRENT,
     self.on_current_button_press, self.connected, lambda:self.sonata_loaded,
-    lambda:self.songinfo, self.update_statusbar, self.iterate_now,
-    lambda:self.library.search_get_style())
+    lambda:self.songinfo, self.update_statusbar, self.iterate_now)
 vbox_current, playlistevbox = self.current.get_widgets()
 ...
 self.current.current_update(prevstatus_playlist, self.status['playlistlength'])
@@ -29,7 +28,7 @@ class Current:
 
     def __init__(self, config, mpd, TAB_CURRENT, on_current_button_press,
                  connected, sonata_loaded, songinfo, update_statusbar,
-                 iterate_now, search_get_style, add_tab):
+                 iterate_now, add_tab):
         self.config = config
         self.mpd = mpd
         self.on_current_button_press = on_current_button_press
@@ -38,7 +37,6 @@ class Current:
         self.songinfo = songinfo
         self.update_statusbar = update_statusbar
         self.iterate_now = iterate_now
-        self.search_get_style = search_get_style
 
         self.currentdata = None
         self.filterbox_visible = False
@@ -55,7 +53,6 @@ class Current:
         # TreeViewColumn, order
         self.column_sorted = (None, Gtk.SortType.DESCENDING)
         self.total_time = 0
-        self.edit_style_orig = None
         self.resizing_columns = None
         self.prev_boldrow = -1
         self.prevtodo = None
@@ -671,7 +668,6 @@ class Current:
         if self.filterbox_visible:
             ui.hide(self.filterbox)
             self.filterbox_visible = False
-            self.edit_style_orig = self.search_get_style()
             self.filterpattern.set_text("")
             self.searchfilter_stop_loop()
         elif self.connected():
@@ -847,10 +843,9 @@ class Current:
             elif len(matches) > 0:
                 self.current.set_cursor(Gtk.TreePath.new_first(), None, False)
             if len(matches) == 0:
-                GLib.idle_add(self.filtering_entry_make_red, self.filterpattern)
+                GLib.idle_add(ui.set_entry_invalid, self.filterpattern)
             else:
-                GLib.idle_add(self.filtering_entry_revert_color,
-                              self.filterpattern)
+                GLib.idle_add(ui.reset_entry_marking, self.filterpattern)
             self.current.thaw_child_notify()
 
     def searchfilter_key_pressed(self, widget, event):
@@ -869,14 +864,6 @@ class Current:
     def filter_entry_grab_focus(self, widget):
         widget.grab_focus()
         widget.set_position(-1)
-
-    def filtering_entry_make_red(self, editable):
-        color = Gdk.RGBA()
-        color.parse("red")
-        editable.override_color(Gtk.StateFlags.NORMAL, color)
-
-    def filtering_entry_revert_color(self, editable): #FIXME
-        editable.set_style(self.edit_style_orig)
 
     def boldrow(self, row):
         if row > -1:
