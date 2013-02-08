@@ -821,12 +821,6 @@ class Library:
         self.save_timeout = None
         self.libsearch_last_tooltip = None
 
-        #XXX
-        self.lib_list_genres = None
-        self.lib_list_artists = None
-        self.lib_list_albums = None
-        self.lib_list_years = None
-
         # Library tab
         self.builder = ui.builder('library')
         self.css_provider = ui.css_provider('library')
@@ -861,14 +855,6 @@ class Library:
 
         self.search = LibrarySearch(self.mpd)
         self.search_thread = None
-
-        #XXX
-        self.albumpb = self.library.render_icon('sonata-album',
-                                                Gtk.IconSize.LARGE_TOOLBAR)
-        self.sonatapb = self.library.render_icon('sonata',
-                                                 Gtk.IconSize.LARGE_TOOLBAR)
-        self.artistpb = self.library.render_icon('sonata-artist',
-                                                 Gtk.IconSize.LARGE_TOOLBAR)
 
         self.album_crumb = None
         self.view = None
