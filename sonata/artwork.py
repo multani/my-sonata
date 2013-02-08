@@ -23,6 +23,8 @@ class ArtworkThread(threading.Thread, GObject.GObject):
     def __init__(self, artwork, art_queue):
         GObject.GObject.__init__(self)
         threading.Thread.__init__(self)
+        self.name = "Artwork Thread"
+        self.daemon = True
         self.artwork = artwork
         self.art_queue = art_queue
 
@@ -61,7 +63,7 @@ class ArtworkThread(threading.Thread, GObject.GObject):
             else:
                 self.artwork.cache[data] = None
 
-            self.emit('art_ready', data)
+            GLib.idle_add(self.emit, 'art_ready', data)
 
             # Will notify that the item has been done
             self.art_queue.task_done()
@@ -182,7 +184,6 @@ class Artwork:
     def artwork_thread_init(self):
         self.art_queue = PriorityQueue()
         self.art_thread = ArtworkThread(self, self.art_queue)
-        self.art_thread.daemon = True
         self.art_thread.start()
 
     def get_cached_filename(self, cache_key):
