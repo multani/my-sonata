@@ -470,7 +470,7 @@ class Base:
             self.on_current_button_press, self.connected,
             lambda: self.sonata_loaded, lambda: self.songinfo,
             self.update_statusbar, self.iterate_now,
-            lambda: self.library.libsearchfilter_get_style(), self.add_tab)
+            lambda: self.library.search_get_style(), self.add_tab)
 
         self.current_treeview = self.current.get_treeview()
         self.current_selection = self.current.get_selection()
@@ -1536,7 +1536,7 @@ class Base:
         self.album_get_artist()
         # Now update the library and playlist tabs
         if self.library.search_visible():
-            self.library.on_library_search_combo_change()
+            self.library.on_search_combo_change()
         else:
             self.library.library_browse(root=self.config.wd)
         self.playlists.populate()
@@ -3063,7 +3063,7 @@ class Base:
             self.switch_to_tab_name(self.TAB_LIBRARY)
         if self.library.search_visible():
             self.library.on_search_end(None)
-        self.library.libsearchfilter_set_focus()
+        self.library.search_set_focus()
 
     def update_menu_visibility(self, show_songinfo_only=False):
         if show_songinfo_only or not self.config.expanded:

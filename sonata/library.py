@@ -2,7 +2,7 @@ import os
 import re
 import gettext
 import locale
-import threading # libsearchfilter_toggle starts thread libsearchfilter_loop
+import threading
 import operator
 
 from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, GLib, Pango
@@ -44,10 +44,22 @@ def list_mark_various_artists_albums(albums):
 class LibrarySearch(object):
     def __init__(self, mpd):
         self.mpd = mpd
+        self.search_terms = ('artist', 'title', 'album', 'genre', 'file', 'any')
         self.cache_genres = None
         self.cache_artists = None
         self.cache_albums = None
         self.cache_years = None
+
+        # Used for the actual filtering search
+        # These two are the only ones modified by the Main Thread
+        self.search_num = None
+        self.search_input = None
+
+        self.search_previous_count = None
+        self.search_base = None
+        self.search_by = None
+        self.search_cache = None
+        self.subsearch = False
 
     def invalidate_cache(self):
         self.cache_genres = None
@@ -207,6 +219,169 @@ class LibrarySearch(object):
             results = misc.remove_list_duplicates(results, case=False)
         results.sort(key=locale.strxfrm)
         return results
+
+    def cleanup_search(self):
+        # Main Thread
+        self.search_num = None
+        self.search_input = None
+
+        self.search_previous_count = None
+        self.search_base = None
+        self.search_by = None
+        self.search_cache = None
+        self.subsearch = False
+
+    def request_search(self, search_thread_cb):
+        # Search Thread
+        search_by = self.search_terms[self.search_num]
+        search_base = self.search_input[:2]
+        if (self.search_base is None or self.search_base != search_base or
+                self.search_by is None or self.search_by != search_by):
+            self.search_base = search_base
+            GLib.idle_add(self.perform_search, search_thread_cb)
+            self.subsearch = False
+        else:
+            self.subsearch = True
+            search_thread_cb()
+
+    def perform_search(self, search_thread_cb):
+        # Main Thread
+        # Do library search based on first two letters
+        # This is cached so that similar subsearches will complete faster
+        search_by = self.search_terms[self.search_num]
+        self.search_cache = self.mpd.search(search_by, self.search_base)
+        search_thread_cb()
+
+    def filter_search_data(self):
+        # Search Thread
+        # Now, use filtering similar to playlist filtering:
+        # this make take some seconds... and we'll escape the search text
+        # because we'll be searching for a match in items that are also escaped
+        #
+        # Note that the searching is not order specific. That is, "foo bar"
+        # will match on "fools bar" and "barstool foo".
+
+        search_by = self.search_terms[self.search_num]
+        searches = self.search_input.split(" ")
+        regexps = []
+        for search in searches:
+            search = misc.escape_html(search)
+            search = re.escape(search)
+            search = '.*' + search.lower()
+            regexps.append(re.compile(search))
+        matches = []
+        if search_by == 'any':
+            str_data = lambda row, search_by: str(" ".join(row.values()))
+        else:
+            str_data = lambda row, search_by: row.get(search_by, '')
+        for row in self.search_cache:
+            is_match = True
+            for regexp in regexps:
+                if not regexp.match(str_data(row, search_by).lower()):
+                    is_match = False
+                    break
+            if is_match:
+                matches.append(row)
+        # The changed search didn't change the results
+        # FIXME This fails for two different result sets with same length.
+        if self.subsearch and len(matches) == self.search_previous_count:
+            return None
+        self.search_previous_count = len(matches)
+        return matches
+
+
+# This thread performs the actual filtering, but because of how we connect to
+# MPD, it still gets the data from MPD on the main thread.
+# Without doing this, the results are not stable, though it does make our
+# code more complicated to do it this way.
+class LibrarySearchThread(threading.Thread, GObject.GObject):
+    # search_ready means the results are there to be loaded in the UI
+    # search_stopped means the thread has nothing to do and should be ended
+    # until new data is available
+    __gsignals__ = {
+        'search_ready': (GObject.SIGNAL_RUN_FIRST, None,
+                         (GObject.TYPE_PYOBJECT,)),
+        'search_stopped': (GObject.SIGNAL_RUN_FIRST, None,
+                           (GObject.TYPE_PYOBJECT,)),
+    }
+    def __init__(self, search, search_condition):
+        threading.Thread.__init__(self)
+        GObject.GObject.__init__(self)
+        self.name = "Library Search Thread"
+        self.daemon = True
+        self.search = search
+        self.condition = search_condition
+        self._stop_event = threading.Event()
+        self._ready_event = threading.Event()
+        self.input = None
+        self.search_num = None
+
+    def stop(self):
+        self._stop_event.set()
+
+    def stopped(self):
+        return self._stop_event.is_set()
+
+    def ready(self):
+        self._ready_event.set()
+
+    def done(self):
+        self._ready_event.clear()
+
+    def awaiting_data(self):
+        return not self._ready_event.is_set()
+
+    def run(self):
+        while True:
+            input_changed = False
+            self.condition.acquire()
+            while (not self.stopped() and self.awaiting_data() and
+                   self.input == self.search.search_input and
+                   self.search_num == self.search.search_num):
+                self.condition.wait()
+            input_changed = self.input != self.search.search_input
+            num_changed = self.search_num != self.search.search_num
+            if input_changed or num_changed:
+                self.input = self.search.search_input
+                self.search_num = self.search.search_num
+            elif not self.awaiting_data():
+                self.filter_search_data()
+            self.done()
+            self.condition.notify_all()
+            self.condition.release()
+
+            if self.stopped():
+                return
+
+            input_len = len(self.input)
+            # Only search when we have at least two characters,
+            # call it quits when we have none
+            if (input_changed or num_changed) and input_len > 1:
+                self.request_search()
+            elif input_len == 0:
+                # The second argument is to tell search_toggle not to refocus
+                # on the library
+                GLib.idle_add(self.emit, 'search_stopped', False)
+
+    def ready_cb(self):
+        # Main Thread, Search Threads (see LibrarySearch.request_search)
+        self.ready()
+        with self.condition:
+            self.condition.notify_all()
+
+    def request_search(self):
+        # Search Thread
+        # Simple wrapper for holding the condition and not signaling if no
+        # change in results
+        with self.condition:
+            self.search.request_search(self.ready_cb)
+            self.condition.notify_all()
+
+    def filter_search_data(self):
+        # Search Thread
+        search_data = self.search.filter_search_data()
+        if search_data is not None:
+            GLib.idle_add(self.emit, 'search_ready', search_data)
 
 
 class LibraryView(object):
@@ -405,18 +580,19 @@ class LibraryView(object):
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
         return bd
 
+    def song_row(self, song):
+        return [self.song_pixbuf, SongRecord(path=song['file']),
+                formatting.parse(self.config.libraryformat, song, True),
+                self.TYPE_SONG]
+
     def _get_data_songs(self, song_record):
         bd = []
         songs, _playtime, _num_songs = self.search.get_search_items(song_record)
 
         for song in songs:
-            data = SongRecord(path=song.file)
             track = str(song.get('track', 99)).zfill(2)
             disc = str(song.get('disc', 99)).zfill(2)
-            song_data = [self.song_pixbuf, data,
-                         formatting.parse(self.config.libraryformat,
-                                          song, True),
-                         self.TYPE_SONG]
+            song_data = self.song_row(song)
             sort_data = 'f{disc}{track}'.format(disc=disc, track=track)
             try:
                 song_title = misc.lower_no_the(song.title)
@@ -477,11 +653,7 @@ class FilesystemView(LibraryView):
                             self.TYPE_FOLDER]
                 bd += [('d' + str(name).lower(), row_data)]
             elif 'file' in file_info:
-                file_data = SongRecord(path=file_info['file'])
-                row_disp = formatting.parse(self.config.libraryformat,
-                                            file_info, True)
-                row_data = [self.song_pixbuf, file_data, row_disp,
-                            self.TYPE_SONG]
+                row_data = self.song_row(file_info)
                 bd += [('f' + file_info['file'].lower(), row_data)]
         bd.sort(key=operator.itemgetter(0))
         if path == '/':
@@ -646,22 +818,13 @@ class Library:
         self.on_library_button_press = on_library_button_press
         self.get_multicd_album_root_dir = get_multicd_album_root_dir
 
-        self.search_terms = [_('Artist'), _('Title'), _('Album'), _('Genre'),
-                             _('Filename'), _('Everything')]
-        self.search_terms_mpd = ['artist', 'title', 'album', 'genre', 'file',
-                                 'any']
-
-        self.libfilterbox_cmd_buf = None
-        self.libfilterbox_cond = None
-        self.libfilterbox_source = None
-
-        self.prevlibtodo_base = None
-        self.prevlibtodo_base_results = None
-        self.prevlibtodo = None
+        self.search_update_timeout = None
+        self.search_condition = None
 
         self.save_timeout = None
         self.libsearch_last_tooltip = None
 
+        #XXX
         self.lib_list_genres = None
         self.lib_list_artists = None
         self.lib_list_albums = None
@@ -700,6 +863,7 @@ class Library:
                            TAB_LIBRARY, self.library)
 
         self.search = LibrarySearch(self.mpd)
+        self.search_thread = None
 
         #XXX
         self.albumpb = self.library.render_icon('sonata-album',
@@ -726,17 +890,16 @@ class Library:
         self.library.connect('key-press-event', self.on_library_key_press)
         self.library.connect('query-tooltip', self.on_library_query_tooltip)
         self.libraryview.connect('clicked', self.library_view_popup)
-        self.searchtext.connect('key-press-event',
-                                self.libsearchfilter_key_pressed)
-        self.searchtext.connect('activate', self.libsearchfilter_on_enter)
+        self.searchtext.connect('key-press-event', self.on_search_key_pressed)
+        self.searchtext.connect('activate', self.on_search_enter)
         self.searchbutton.connect('clicked', self.on_search_end)
 
         self.artwork.art_thread.connect('art_ready', self.art_ready_cb)
 
-        self.libfilter_changed_handler = self.searchtext.connect(
-            'changed', self.libsearchfilter_feed_loop)
+        self.search_changed_handler = self.searchtext.connect(
+            'changed', self.on_search_update)
         searchcombo_changed_handler = self.searchcombo.connect(
-            'changed', self.on_library_search_combo_change)
+            'changed', self.on_search_combo_change)
 
         # Initialize library data and widget
         self.libraryposition = {}
@@ -791,6 +954,7 @@ class Library:
                 True)
 
     def on_libraryview_chosen(self, action):
+        # FIXME on_search_end already has this precondition
         if self.search_visible():
             self.on_search_end(None)
         self.view = self.ACTION_TO_VIEW[action.get_name()]
@@ -1200,194 +1364,88 @@ class Library:
                 results.append(item['file'])
         return results
 
-    def on_library_search_combo_change(self, _combo=None):
+    def on_search_combo_change(self, _combo=None):
         self.config.last_search_num = self.searchcombo.get_active()
         if not self.search_visible():
             return
-        self.prevlibtodo = ""
-        self.prevlibtodo_base = "__"
-        self.libsearchfilter_feed_loop(self.searchtext)
+        self.on_search_update()
+
+    def on_search_update(self, _widget=None):
+        if not self.search_visible():
+            self.search_toggle(None)
+        # Only update the search if 300ms pass without a change in Gtk.Entry
+        try:
+            GLib.source_remove(self.search_update_timeout)
+        except:
+            pass
+        self.search_update_timeout = GLib.timeout_add(300, self.update_search)
+
+    def update_search(self):
+        self.search_update_timeout = None
+        with self.search_condition:
+            self.search.search_num = self.config.last_search_num
+            self.search.search_input = self.searchtext.get_text()
+            self.search_condition.notify_all()
 
     def on_search_end(self, _button, move_focus=True):
         if self.search_visible():
-            self.libsearchfilter_toggle(move_focus)
+            self.search_toggle(move_focus)
 
     def search_visible(self):
         return self.searchbutton.get_property('visible')
 
-    def libsearchfilter_toggle(self, move_focus):
+    def search_toggle(self, move_focus):
         if not self.search_visible() and self.connected():
             self.library.set_property('has-tooltip', True)
             ui.show(self.searchbutton)
-            self.prevlibtodo = 'foo'
-            self.prevlibtodo_base = "__"
-            self.prevlibtodo_base_results = []
-            # extra thread for background search work,
-            # synchronized with a condition and its internal mutex
-            self.libfilterbox_cond = threading.Condition()
-            self.libfilterbox_cmd_buf = self.searchtext.get_text()
-            qsearch_thread = threading.Thread(target=self.libsearchfilter_loop)
-            qsearch_thread.daemon = True
-            qsearch_thread.start()
-        elif self.search_visible():
+            self.search_condition = threading.Condition()
+            self.search_thread = LibrarySearchThread(self.search,
+                                                     self.search_condition)
+            self.search_thread.connect('search_ready', self.search_ready_cb)
+            self.search_thread.connect('search_stopped', self.on_search_end)
+            self.search_thread.start()
+        else:
             ui.hide(self.searchbutton)
-            self.searchtext.handler_block(self.libfilter_changed_handler)
+            self.searchtext.handler_block(self.search_changed_handler)
             self.searchtext.set_text("")
-            self.searchtext.handler_unblock(self.libfilter_changed_handler)
-            self.libsearchfilter_stop_loop()
-            # call library_browse from the main thread to avoid corruption
-            # of treeview, fixes #1959
+            self.searchtext.handler_unblock(self.search_changed_handler)
+            self.search_thread.stop()
+            with self.search_condition:
+                self.search_condition.notify_all()
+            self.search_thread.join()
+            self.search_thread = None
+            self.search_condition = None
+            self.search.cleanup_search()
+            # Restore the regular view
             GLib.idle_add(self.library_browse, None, self.config.wd)
+            GLib.idle_add(self.filtering_entry_revert_color, self.searchtext)
             if move_focus:
                 self.library.grab_focus()
 
-    def libsearchfilter_feed_loop(self, editable):
-        if not self.search_visible():
-            self.libsearchfilter_toggle(None)
-        # Lets only trigger the searchfilter_loop if 200ms pass
-        # without a change in Gtk.Entry
-        try:
-            GLib.source_remove(self.libfilterbox_source)
-        except:
-            pass
-        self.libfilterbox_source = GLib.timeout_add(
-            300, self.libsearchfilter_start_loop, editable)
-
-    def libsearchfilter_start_loop(self, editable):
-        self.libfilterbox_cond.acquire()
-        self.libfilterbox_cmd_buf = editable.get_text()
-        self.libfilterbox_cond.notifyAll()
-        self.libfilterbox_cond.release()
-
-    def libsearchfilter_stop_loop(self):
-        self.libfilterbox_cond.acquire()
-        self.libfilterbox_cmd_buf = '$$$QUIT###'
-        self.libfilterbox_cond.notifyAll()
-        self.libfilterbox_cond.release()
-
-    def libsearchfilter_loop(self):
-        while True:
-            # copy the last command or pattern safely
-            self.libfilterbox_cond.acquire()
-            try:
-                while(self.libfilterbox_cmd_buf == '$$$DONE###'):
-                    self.libfilterbox_cond.wait()
-                todo = self.libfilterbox_cmd_buf
-                self.libfilterbox_cond.release()
-            except:
-                todo = self.libfilterbox_cmd_buf
-            searchby = self.search_terms_mpd[self.config.last_search_num]
-            if self.prevlibtodo != todo:
-                if todo == '$$$QUIT###':
-                    GLib.idle_add(self.filtering_entry_revert_color,
-                                  self.searchtext)
-                    return
-                elif len(todo) > 1:
-                    GLib.idle_add(self.libsearchfilter_do_search, searchby,
-                                  todo)
-                elif len(todo) == 0:
-                    GLib.idle_add(self.filtering_entry_revert_color,
-                                  self.searchtext)
-                    self.libsearchfilter_toggle(False)
-                else:
-                    GLib.idle_add(self.filtering_entry_revert_color,
-                                  self.searchtext)
-            self.libfilterbox_cond.acquire()
-            self.libfilterbox_cmd_buf = '$$$DONE###'
-            try:
-                self.libfilterbox_cond.release()
-            except Exception as e:
-                # XXX add logger here in the future!
-                raise e
-            self.prevlibtodo = todo
-
-    def libsearchfilter_do_search(self, searchby, todo):
-        if not self.prevlibtodo_base in todo:
-            # Do library search based on first two letters:
-            self.prevlibtodo_base = todo[:2]
-            self.prevlibtodo_base_results = self.mpd.search(
-                searchby, self.prevlibtodo_base)
-            subsearch = False
-        else:
-            subsearch = True
-
-        # Now, use filtering similar to playlist filtering:
-        # this make take some seconds... and we'll escape the search text
-        # because we'll be searching for a match in items that are also escaped
-        #
-        # Note that the searching is not order specific. That is, "foo bar"
-        # will match on "fools bar" and "barstool foo".
-
-        todos = todo.split(" ")
-        regexps = []
-        for i in range(len(todos)):
-            todos[i] = misc.escape_html(todos[i])
-            todos[i] = re.escape(todos[i])
-            todos[i] = '.*' + todos[i].lower()
-            regexps.append(re.compile(todos[i]))
-        matches = []
-        if searchby != 'any':
-            for row in self.prevlibtodo_base_results:
-                is_match = True
-                for regexp in regexps:
-                    if not regexp.match(row.get(searchby, '').lower()):
-                        is_match = False
-                        break
-                if is_match:
-                    matches.append(row)
-        else:
-            for row in self.prevlibtodo_base_results:
-                allstr = " ".join(row.values())
-                is_match = True
-                for regexp in regexps:
-                    if not regexp.match(str(allstr).lower()):
-                        is_match = False
-                        break
-                if is_match:
-                    matches.append(row)
-        if subsearch and len(matches) == len(self.librarydata):
-            # nothing changed..
-            return
-        self.library.freeze_child_notify()
-        currlen = len(self.librarydata)
-        bd = [(self.sonatapb,
-               SongRecord(path=item['file']),
-               formatting.parse(self.config.libraryformat, item, True),
-               self.view.TYPE_SONG)
-              for item in matches if 'file' in item]
+    def search_ready_cb(self, _widget, data):
+        bd = [self.view.song_row(song) for song in data if 'file' in song]
         bd.sort(key=lambda key: locale.strxfrm(key[2]))
-        for i, item in enumerate(bd):
-            if i < currlen:
-                j = self.librarydata.get_iter((i, ))
-                for index in range(len(item)):
-                    if item[index] != self.librarydata.get_value(j, index):
-                        self.librarydata.set_value(j, index, item[index])
-            else:
-                self.librarydata.append(item)
-        # Remove excess items...
-        newlen = len(bd)
-        if newlen == 0:
-            self.librarydata.clear()
-        else:
-            for i in range(currlen - newlen):
-                j = self.librarydata.get_iter((currlen - 1 - i,))
-                self.librarydata.remove(j)
+        self.library.freeze_child_notify()
+        self.librarydata.clear()
+        for row in bd:
+            self.librarydata.append(row)
         self.library.thaw_child_notify()
-        if len(matches) == 0:
+        if len(bd) == 0:
             GLib.idle_add(self.filtering_entry_make_red, self.searchtext)
         else:
             GLib.idle_add(self.library.set_cursor, Gtk.TreePath.new_first(),
                           None, False)
             GLib.idle_add(self.filtering_entry_revert_color, self.searchtext)
 
-    def libsearchfilter_key_pressed(self, widget, event):
+    def on_search_key_pressed(self, widget, event):
         self.filter_key_pressed(widget, event, self.library)
 
-    def libsearchfilter_on_enter(self, _entry):
+    def on_search_enter(self, _entry):
         self.on_library_row_activated(None, None)
 
-    def libsearchfilter_set_focus(self):
+    def search_set_focus(self):
         GLib.idle_add(self.searchtext.grab_focus)
 
-    def libsearchfilter_get_style(self):
+    def search_get_style(self):
         return self.searchtext.get_style()
+

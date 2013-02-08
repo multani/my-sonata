@@ -8,7 +8,7 @@ import current
 self.current = current.Current(self.config, self.client, self.TAB_CURRENT,
     self.on_current_button_press, self.connected, lambda:self.sonata_loaded,
     lambda:self.songinfo, self.update_statusbar, self.iterate_now,
-    lambda:self.library.libsearchfilter_get_style())
+    lambda:self.library.search_get_style())
 vbox_current, playlistevbox = self.current.get_widgets()
 ...
 self.current.current_update(prevstatus_playlist, self.status['playlistlength'])
@@ -29,7 +29,7 @@ class Current:
 
     def __init__(self, config, mpd, TAB_CURRENT, on_current_button_press,
                  connected, sonata_loaded, songinfo, update_statusbar,
-                 iterate_now, libsearchfilter_get_style, add_tab):
+                 iterate_now, search_get_style, add_tab):
         self.config = config
         self.mpd = mpd
         self.on_current_button_press = on_current_button_press
@@ -38,7 +38,7 @@ class Current:
         self.songinfo = songinfo
         self.update_statusbar = update_statusbar
         self.iterate_now = iterate_now
-        self.libsearchfilter_get_style = libsearchfilter_get_style
+        self.search_get_style = search_get_style
 
         self.currentdata = None
         self.filterbox_visible = False
@@ -671,7 +671,7 @@ class Current:
         if self.filterbox_visible:
             ui.hide(self.filterbox)
             self.filterbox_visible = False
-            self.edit_style_orig = self.libsearchfilter_get_style()
+            self.edit_style_orig = self.search_get_style()
             self.filterpattern.set_text("")
             self.searchfilter_stop_loop()
         elif self.connected():
@@ -875,7 +875,7 @@ class Current:
         color.parse("red")
         editable.override_color(Gtk.StateFlags.NORMAL, color)
 
-    def filtering_entry_revert_color(self, editable):
+    def filtering_entry_revert_color(self, editable): #FIXME
         editable.set_style(self.edit_style_orig)
 
     def boldrow(self, row):
