@@ -833,11 +833,9 @@ class Library:
             'library_crumb_section_togglebutton')
         self.crumb_section_image = self.builder.get_object(
             'library_crumb_section_image')
-        self.crumb_break = self.builder.get_object(
-            'library_crumb_break_box')
-        self.breadcrumbs.set_crumb_break(self.crumb_break)
+        crumb_break = self.builder.get_object('library_crumb_break_box')
+        self.breadcrumbs.set_crumb_break(crumb_break)
         self.crumb_section_handler = None
-        self.searchbox = self.builder.get_object('library_page_searchbox')
         self.searchcombo = self.builder.get_object(
             'library_page_searchbox_combo')
         self.searchtext = self.builder.get_object(
@@ -894,14 +892,14 @@ class Library:
                                          GObject.TYPE_PYOBJECT, str, str)
         self.library.set_model(self.librarydata)
         self.library.set_search_column(2)
-        self.librarycell = Gtk.CellRendererText()
-        self.librarycell.set_property("ellipsize", Pango.EllipsizeMode.END)
-        self.libraryimg = Gtk.CellRendererPixbuf()
+        librarycell = Gtk.CellRendererText()
+        librarycell.set_property("ellipsize", Pango.EllipsizeMode.END)
+        libraryimg = Gtk.CellRendererPixbuf()
         self.librarycolumn = Gtk.TreeViewColumn()
-        self.librarycolumn.pack_start(self.libraryimg, False)
-        self.librarycolumn.pack_start(self.librarycell, True)
-        self.librarycolumn.add_attribute(self.libraryimg, 'pixbuf', 0)
-        self.librarycolumn.add_attribute(self.librarycell, 'markup', 2)
+        self.librarycolumn.pack_start(libraryimg, False)
+        self.librarycolumn.pack_start(librarycell, True)
+        self.librarycolumn.add_attribute(libraryimg, 'pixbuf', 0)
+        self.librarycolumn.add_attribute(librarycell, 'markup', 2)
         self.librarycolumn.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
         self.library.append_column(self.librarycolumn)
         self.library_selection.set_mode(Gtk.SelectionMode.MULTIPLE)
