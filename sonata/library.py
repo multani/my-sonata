@@ -473,7 +473,7 @@ class LibraryView(object):
                 cache_data = SongRecord(artist=self.config.wd.artist,
                                         album=self.config.wd.album,
                                         path=self.config.wd.path)
-                pb = self.artwork.get_pixbuf(cache_data, priority=9)
+                pb = self.artwork.get_album_row_pixbuf(cache_data, priority=9)
                 if not pb:
                     icon = self.album_icon
             elif key == 'artist':
@@ -552,7 +552,7 @@ class LibraryView(object):
             data = album_row[1][1]
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
-            pb = self.artwork.get_pixbuf(cache_key)
+            pb = self.artwork.get_album_row_pixbuf(cache_key)
             if pb:
                 album_row[1][0] = pb
         # Now, songs not in albums:
@@ -725,7 +725,7 @@ class AlbumView(LibraryView):
             data = album[1][1]
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
-            pb = self.artwork.get_pixbuf(cache_key)
+            pb = self.artwork.get_album_row_pixbuf(cache_key)
             if pb:
                 album[1][0] = pb
         self.cache = bd
@@ -1037,7 +1037,7 @@ class Library:
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
             if cache_key in self.artwork.cache:
-                pb = self.artwork.get_pixbuf(cache_key)
+                pb = self.artwork.get_album_row_pixbuf(cache_key)
                 if pb:
                     self.set_pb_for_row(index, pb)
                 
@@ -1066,7 +1066,7 @@ class Library:
                                     album=self.config.wd.album,
                                     path=self.config.wd.path)
             if force or cache_data == data:
-                pb = self.artwork.get_pixbuf(cache_data)
+                pb = self.artwork.get_album_row_pixbuf(cache_data)
                 if pb:
                     pb = pb.scale_simple(16, 16, GdkPixbuf.InterpType.HYPER)
                     self.album_crumb.image.set_from_pixbuf(pb)
@@ -1075,7 +1075,7 @@ class Library:
         self.pixbuf_for_album_crumb(data)
         if not data in self.view.data_rows:
             return
-        pb = self.artwork.get_pixbuf(data)
+        pb = self.artwork.get_album_row_pixbuf(data)
         if pb:
             # lookup for existing row
             row = self.view.data_rows[data]

@@ -196,7 +196,7 @@ class Artwork:
         except:
             return None
 
-    def get_pixbuf(self, cache_key, priority=10):
+    def get_album_row_pixbuf(self, cache_key, priority=10):
         filename = self.get_cached_filename(cache_key)
         if filename:
             pb = GdkPixbuf.Pixbuf.new_from_file_at_size(filename,
