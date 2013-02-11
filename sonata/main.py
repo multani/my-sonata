@@ -501,7 +501,7 @@ class Base:
         self.library_treeview = self.library.get_treeview()
         self.library_selection = self.library.get_selection()
 
-        libraryactions = self.library.get_libraryactions()
+        libraryactions = self.library.get_actions()
 
         # Info tab
         self.info = info.Info(self.config, linkcolor, self.on_link_click,
@@ -583,7 +583,7 @@ class Base:
         self.imagemenu = self.UIManager.get_widget('/imagemenu')
         self.traymenu = self.UIManager.get_widget('/traymenu')
         self.librarymenu = self.UIManager.get_widget('/librarymenu')
-        self.library.set_librarymenu(self.librarymenu)
+        self.library.set_menu(self.librarymenu)
         self.notebookmenu = self.UIManager.get_widget('/notebookmenu')
 
         # Autostart plugins
@@ -1168,7 +1168,7 @@ class Base:
                                 self.volumebutton):
                 mediabutton.set_property('sensitive', True)
             if self.sonata_loaded:
-                self.library.library_browse(root=SongRecord(path="/"))
+                self.library.browse(root=SongRecord(path="/"))
             self.playlists.populate()
             self.streams.populate()
             self.on_notebook_page_change(self.notebook, 0,
@@ -1385,7 +1385,7 @@ class Base:
                 column = self.current.columns[0]
             elif self.current_tab == self.TAB_LIBRARY:
                 widget = self.library_treeview
-                column = self.library.librarycolumn
+                column = self.library.column
             elif self.current_tab == self.TAB_PLAYLISTS:
                 widget = self.playlists_treeview
                 column = self.playlists.playlistscolumn
@@ -1535,7 +1535,7 @@ class Base:
         if self.library.search_visible():
             self.library.on_search_combo_change()
         else:
-            self.library.library_browse(root=self.config.wd)
+            self.library.browse(root=self.config.wd)
         self.playlists.populate()
         # Update info if it's visible:
         self.info_update(True)
@@ -2788,7 +2788,7 @@ class Base:
     def prefs_libraryoptions_changed(self, entry, _event):
         if self.config.libraryformat != entry.get_text():
             self.config.libraryformat = entry.get_text()
-            self.library.library_browse(root=self.config.wd)
+            self.library.browse(root=self.config.wd)
 
     def prefs_titleoptions_changed(self, entry, _event):
         if self.config.titleformat != entry.get_text():
@@ -2888,7 +2888,7 @@ class Base:
 
     def prefs_stylized_toggled(self, button):
         self.config.covers_type = button.get_active()
-        self.library.library_browse(root=self.config.wd)
+        self.library.browse(root=self.config.wd)
         self.artwork.artwork_update(True)
 
     def prefs_lyrics_toggled(self, button, lyrics_hbox):

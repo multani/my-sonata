@@ -400,20 +400,20 @@ class LibraryView(object):
         self.TYPE_SONG = 'song'
 
         self.artist_icon = 'sonata-artist'
-        self.artist_pixbuf = self.library.library.render_icon_pixbuf(
+        self.artist_pixbuf = self.library.tree.render_icon_pixbuf(
             self.artist_icon, Gtk.IconSize.LARGE_TOOLBAR)
         self.album_icon = 'sonata-album'
-        self.album_pixbuf = self.library.library.render_icon_pixbuf(
+        self.album_pixbuf = self.library.tree.render_icon_pixbuf(
             self.album_icon, Gtk.IconSize.LARGE_TOOLBAR)
         self.genre_icon = Gtk.STOCK_ORIENTATION_PORTRAIT
-        self.genre_pixbuf = self.library.library.render_icon_pixbuf(
+        self.genre_pixbuf = self.library.tree.render_icon_pixbuf(
             self.genre_icon, Gtk.IconSize.LARGE_TOOLBAR)
 
         self.folder_icon = Gtk.STOCK_HARDDISK
-        self.folder_pixbuf = self.library.library.render_icon_pixbuf(
+        self.folder_pixbuf = self.library.tree.render_icon_pixbuf(
             Gtk.STOCK_OPEN, Gtk.IconSize.MENU)
         self.song_icon = 'sonata'
-        self.song_pixbuf = self.library.library.render_icon_pixbuf(
+        self.song_pixbuf = self.library.tree.render_icon_pixbuf(
             self.song_icon, Gtk.IconSize.MENU)
 
     def invalidate_row_cache(self):
@@ -807,7 +807,7 @@ class Library:
         self.artwork = artwork
         self.config = config
         self.mpd = mpd
-        self.librarymenu = None # cyclic dependency, set later
+        self.menu = None # cyclic dependency, set later
         self.settings_save = settings_save
         self.filter_key_pressed = filter_key_pressed
         self.on_add_item = on_add_item
@@ -819,15 +819,15 @@ class Library:
         self.search_condition = None
 
         self.save_timeout = None
-        self.libsearch_last_tooltip = None
+        self.search_last_tooltip = None
 
         # Library tab
         self.builder = ui.builder('library')
         self.css_provider = ui.css_provider('library')
 
-        self.libraryvbox = self.builder.get_object('library_page_v_box')
-        self.library = self.builder.get_object('library_page_treeview')
-        self.library_selection = self.library.get_selection()
+        self.vbox = self.builder.get_object('library_page_v_box')
+        self.tree = self.builder.get_object('library_page_treeview')
+        self.selection = self.tree.get_selection()
         self.breadcrumbs = self.builder.get_object('library_crumbs_box')
         self.crumb_section = self.builder.get_object(
             'library_crumb_section_togglebutton')
@@ -836,20 +836,19 @@ class Library:
         crumb_break = self.builder.get_object('library_crumb_break_box')
         self.breadcrumbs.set_crumb_break(crumb_break)
         self.crumb_section_handler = None
-        self.searchcombo = self.builder.get_object(
+        self.search_combo = self.builder.get_object(
             'library_page_searchbox_combo')
-        self.searchtext = self.builder.get_object(
+        self.search_text = self.builder.get_object(
             'library_page_searchbox_entry')
-        self.searchbutton = self.builder.get_object(
+        self.search_button = self.builder.get_object(
             'library_page_searchbox_button')
-        self.searchbutton.hide()
-        self.libraryview = self.builder.get_object('library_crumb_button')
-        self.tab_label_widget = self.builder.get_object('library_tab_eventbox')
+        self.search_button.hide()
+        self.view_menu_button = self.builder.get_object('library_crumb_button')
+        tab_label_widget = self.builder.get_object('library_tab_eventbox')
         tab_label = self.builder.get_object('library_tab_label')
         tab_label.set_text(TAB_LIBRARY)
 
-        self.tab = add_tab(self.libraryvbox, self.tab_label_widget,
-                           TAB_LIBRARY, self.library)
+        self.tab = add_tab(self.vbox, tab_label_widget, TAB_LIBRARY, self.tree)
 
         self.search = LibrarySearch(self.mpd)
         self.search_thread = None
@@ -865,87 +864,86 @@ class Library:
 
         self.view_caches_reset() #XXX
 
-        self.library.connect('row_activated', self.on_library_row_activated)
-        self.library.connect('button_press_event',
+        self.tree.connect('row_activated', self.on_row_activated)
+        self.tree.connect('button_press_event',
                              self.on_library_button_press)
-        self.library.connect('key-press-event', self.on_library_key_press)
-        self.library.connect('query-tooltip', self.on_library_query_tooltip)
-        self.libraryview.connect('clicked', self.library_view_popup)
-        self.searchtext.connect('key-press-event', self.on_search_key_pressed)
-        self.searchtext.connect('activate', self.on_search_enter)
-        self.searchbutton.connect('clicked', self.on_search_end)
+        self.tree.connect('key-press-event', self.on_key_press)
+        self.tree.connect('query-tooltip', self.on_query_tooltip)
+        self.view_menu_button.connect('clicked', self.view_popup)
+        self.search_text.connect('key-press-event', self.on_search_key_pressed)
+        self.search_text.connect('activate', self.on_search_enter)
+        self.search_button.connect('clicked', self.on_search_end)
 
         self.artwork.art_thread.connect('art_ready', self.art_ready_cb)
 
-        self.search_changed_handler = self.searchtext.connect(
+        self.search_changed_handler = self.search_text.connect(
             'changed', self.on_search_update)
-        searchcombo_changed_handler = self.searchcombo.connect(
+        searchcombo_changed_handler = self.search_combo.connect(
             'changed', self.on_search_combo_change)
 
         # Initialize library data and widget
-        self.libraryposition = {}
-        self.libraryselectedpath = {}
-        self.searchcombo.handler_block(searchcombo_changed_handler)
-        self.searchcombo.set_active(self.config.last_search_num)
-        self.searchcombo.handler_unblock(searchcombo_changed_handler)
-        self.librarydata = Gtk.ListStore(GdkPixbuf.Pixbuf,
+        self.tree_position = {}
+        self.tree_selected_path = {}
+        self.search_combo.handler_block(searchcombo_changed_handler)
+        self.search_combo.set_active(self.config.last_search_num)
+        self.search_combo.handler_unblock(searchcombo_changed_handler)
+        self.tree_data = Gtk.ListStore(GdkPixbuf.Pixbuf,
                                          GObject.TYPE_PYOBJECT, str, str)
-        self.library.set_model(self.librarydata)
-        self.library.set_search_column(2)
-        librarycell = Gtk.CellRendererText()
-        librarycell.set_property("ellipsize", Pango.EllipsizeMode.END)
-        libraryimg = Gtk.CellRendererPixbuf()
-        self.librarycolumn = Gtk.TreeViewColumn()
-        self.librarycolumn.pack_start(libraryimg, False)
-        self.librarycolumn.pack_start(librarycell, True)
-        self.librarycolumn.add_attribute(libraryimg, 'pixbuf', 0)
-        self.librarycolumn.add_attribute(librarycell, 'markup', 2)
-        self.librarycolumn.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
-        self.library.append_column(self.librarycolumn)
-        self.library_selection.set_mode(Gtk.SelectionMode.MULTIPLE)
+        self.tree.set_model(self.tree_data)
+        self.tree.set_search_column(2)
+        data_cell = Gtk.CellRendererText()
+        data_cell.set_property("ellipsize", Pango.EllipsizeMode.END)
+        img_cell = Gtk.CellRendererPixbuf()
+        self.column = Gtk.TreeViewColumn()
+        self.column.pack_start(img_cell, False)
+        self.column.pack_start(data_cell, True)
+        self.column.add_attribute(img_cell, 'pixbuf', 0)
+        self.column.add_attribute(data_cell, 'markup', 2)
+        self.column.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        self.tree.append_column(self.column)
+        self.selection.set_mode(Gtk.SelectionMode.MULTIPLE)
 
-    def get_libraryactions(self):
-        return [view.get_action(self.on_libraryview_chosen)
+    def get_actions(self):
+        return [view.get_action(self.on_view_chosen)
             for view in self.views.values()]
 
     def get_model(self):
-        return self.librarydata
+        return self.tree_data
 
     def get_widgets(self):
-        return self.libraryvbox
+        return self.vbox
 
     def get_treeview(self):
-        return self.library
+        return self.tree
 
     def get_selection(self):
-        return self.library_selection
+        return self.selection
 
-    def set_librarymenu(self, librarymenu):
-        self.librarymenu = librarymenu
-        self.librarymenu.attach_to_widget(self.libraryview, None)
+    def set_menu(self, menu):
+        self.menu = menu
+        self.menu.attach_to_widget(self.view_menu_button, None)
 
-    def library_view_popup(self, button):
-        self.librarymenu.popup(None, None, self.library_view_position_menu,
-                               button, 1, 0)
+    def view_popup(self, button):
+        self.menu.popup(None, None, self.get_popup_position, button, 1, 0)
 
-    def library_view_position_menu(self, _menu, button):
+    def get_popup_position(self, _menu, button):
         alloc = button.get_allocation()
         return (self.config.x + alloc.x,
                 self.config.y + alloc.y + alloc.height,
                 True)
 
-    def on_libraryview_chosen(self, action):
+    def on_view_chosen(self, action):
         # FIXME on_search_end already has this precondition
         if self.search_visible():
             self.on_search_end(None)
         self.view = self.ACTION_TO_VIEW[action.get_name()]
         self.config.lib_view = self.view.view_type
-        self.library.grab_focus()
-        self.libraryposition = {}
-        self.libraryselectedpath = {}
-        self.library_browse(root=SongRecord(path="/"))
-        self.library_selection.unselect_all()
-        GLib.idle_add(self.library.scroll_to_point, 0, 0)
+        self.tree.grab_focus()
+        self.tree_position = {}
+        self.tree_selected_path = {}
+        self.browse(root=SongRecord(path="/"))
+        self.selection.unselect_all()
+        GLib.idle_add(self.tree.scroll_to_point, 0, 0)
 
     def view_caches_reset(self):
         # We should call this on first load and whenever mpd is
@@ -967,20 +965,20 @@ class Library:
             return
 
         # This avoids a warning about a NULL node in get_visible_range
-        if not self.library.props.visible:
+        if not self.tree.props.visible:
             return
 
-        visible_range = self.library.get_visible_range()
+        visible_range = self.tree.get_visible_range()
 
         if visible_range is None:
             return
         else:
             start_row, end_row = visible_range
 
-        self.artwork.library_artwork_update(self.librarydata, start_row,
+        self.artwork.library_artwork_update(self.tree_data, start_row,
                                             end_row, self.albumpb)
 
-    def library_browse(self, _widget=None, root=None):
+    def browse(self, _widget=None, root=None):
         # Populates the library list with entries
         if not self.connected():
             return
@@ -1007,10 +1005,10 @@ class Library:
             # This will happen when the database is updated. So, lets save
             # the current selection in order to try to re-select it after
             # the update is over.
-            model, selected = self.library_selection.get_selected_rows()
+            model, selected = self.selection.get_selected_rows()
             for path in selected:
                 prev_selection.append(model.get_value(model.get_iter(path), 1))
-            self.libraryposition[wd] = self.library.get_visible_rect().height
+            self.tree_position[wd] = self.tree.get_visible_rect().height
             path_updated = True
         else:
             path_updated = False
@@ -1021,16 +1019,16 @@ class Library:
         if new_level > curr_level:
             # Save position and row for where we just were if we've
             # navigated into a sub-directory:
-            self.libraryposition[wd] = self.library.get_visible_rect().height
-            model, rows = self.library_selection.get_selected_rows()
+            self.tree_position[wd] = self.tree.get_visible_rect().height
+            model, rows = self.selection.get_selected_rows()
             if len(rows) > 0:
-                self.libraryselectedpath[wd] = rows[0]
+                self.tree_selected_path[wd] = rows[0]
         elif active_is_filesystem and (root != wd or new_level != curr_level):
             # If we've navigated to a parent directory, don't save
             # anything so that the user will enter that subdirectory
             # again at the top position with nothing selected
-            self.libraryposition[wd] = 0
-            self.libraryselectedpath[wd] = None
+            self.tree_position[wd] = 0
+            self.tree_selected_path[wd] = None
 
         # In case sonata is killed or crashes, we'll save the library state
         # in 5 seconds (first removing any current settings_save timeouts)
@@ -1042,8 +1040,8 @@ class Library:
             self.save_timeout = GLib.timeout_add(5000, self.settings_save)
 
         self.config.wd = wd = root
-        self.library.freeze_child_notify()
-        self.librarydata.clear()
+        self.tree.freeze_child_notify()
+        self.tree_data.clear()
         self.view.invalidate_row_cache()
 
         # Populate treeview with data:
@@ -1054,13 +1052,13 @@ class Library:
             if len(bd) == 0:
                 # Nothing found; go up a level until we reach the top level
                 # or results are found
-                self.config.wd = self.library_get_parent()
+                self.config.wd = self.get_parent()
                 if self.config.wd == wd:
                     break
                 wd = self.config.wd
 
         for index, (_sort, path) in enumerate(bd):
-            self.librarydata.append(path)
+            self.tree_data.append(path)
             data = path[1]
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
@@ -1071,15 +1069,15 @@ class Library:
                 
             self.view.data_rows[cache_key] = index
 
-        self.library.thaw_child_notify()
+        self.tree.thaw_child_notify()
 
         # Scroll back to set view for current dir:
-        self.library.realize()
-        GLib.idle_add(self.library_set_view, not path_updated)
+        self.tree.realize()
+        GLib.idle_add(self.set_view, not path_updated)
         if (len(prev_selection) > 0 or prev_selection_root or
                 prev_selection_parent):
             # Retain pre-update selection:
-            self.library_retain_selection(prev_selection, prev_selection_root,
+            self.retain_selection(prev_selection, prev_selection_root,
                                           prev_selection_parent)
 
         #XXX
@@ -1089,8 +1087,8 @@ class Library:
         self.update_breadcrumbs()
 
     def set_pb_for_row(self, row, pb):
-        i = self.librarydata.get_iter((row,))
-        self.librarydata.set_value(i, 0, pb)
+        i = self.tree_data.get_iter((row,))
+        self.tree_data.set_value(i, 0, pb)
 
     def pixbuf_for_album_crumb(self, data=None, force=False):
         if self.album_crumb:
@@ -1141,7 +1139,7 @@ class Library:
             context.remove_class('last_crumb')
 
         self.crumb_section_handler = self.crumb_section.connect('toggled',
-            self.library_browse, SongRecord(path='/'))
+            self.browse, SongRecord(path='/'))
 
         # add a button for each crumb
         for crumb in crumbs:
@@ -1168,53 +1166,53 @@ class Library:
                 context.add_class('last_crumb')
 
             b.set_tooltip_text(label.get_label())
-            b.connect('toggled', self.library_browse, target)
+            b.connect('toggled', self.browse, target)
             self.breadcrumbs.pack_start(b, False, False, 0)
             b.show_all()
 
-    def library_retain_selection(self, prev_selection, prev_selection_root,
-                                 prev_selection_parent):
-        self.library_selection.unselect_all()
+    def retain_selection(self, prev_selection, prev_selection_root,
+                         prev_selection_parent):
+        self.selection.unselect_all()
         # Now attempt to retain the selection from before the update:
         for value in prev_selection:
-            for row in self.librarydata:
+            for row in self.tree_data:
                 if value == row[1]:
-                    self.library_selection.select_path(row.path)
+                    self.selection.select_path(row.path)
                     break
         if prev_selection_root:
-            self.library_selection.select_path((0,))
+            self.selection.select_path((0,))
         if prev_selection_parent:
-            self.library_selection.select_path((1,))
+            self.selection.select_path((1,))
 
-    def library_set_view(self, select_items=True):
+    def set_view(self, select_items=True):
         # select_items should be false if the same directory has merely
         # been refreshed (updated)
         try:
-            if self.config.wd in self.libraryposition:
-                self.library.scroll_to_point(
-                    -1, self.libraryposition[self.config.wd])
+            if self.config.wd in self.tree_position:
+                self.tree.scroll_to_point(
+                    -1, self.tree_position[self.config.wd])
             else:
-                self.library.scroll_to_point(0, 0)
+                self.tree.scroll_to_point(0, 0)
         except:
-            self.library.scroll_to_point(0, 0)
+            self.tree.scroll_to_point(0, 0)
 
         # Select and focus previously selected item
         if select_items:
-            if self.config.wd in self.libraryselectedpath:
+            if self.config.wd in self.tree_selected_path:
                 try:
-                    if self.libraryselectedpath[self.config.wd]:
-                        self.library_selection.select_path(
-                            self.libraryselectedpath[self.config.wd])
-                        self.library.grab_focus()
+                    if self.tree_selected_path[self.config.wd]:
+                        self.selection.select_path(
+                            self.tree_selected_path[self.config.wd])
+                        self.tree.grab_focus()
                 except:
                     pass
 
-    def on_library_key_press(self, widget, event):
+    def on_key_press(self, widget, event):
         if event.keyval == Gdk.keyval_from_name('Return'):
-            self.on_library_row_activated(widget, widget.get_cursor()[0])
+            self.on_row_activated(widget, widget.get_cursor()[0])
             return True
 
-    def on_library_query_tooltip(self, widget, x, y, keyboard_mode, tooltip):
+    def on_query_tooltip(self, widget, x, y, keyboard_mode, tooltip):
         if keyboard_mode or not self.search_visible():
             widget.set_tooltip_text("")
             return False
@@ -1227,53 +1225,52 @@ class Library:
             # If the user hovers over an empty row and then back to
             # a row with a search result, this will ensure the tooltip
             # shows up again:
-            GLib.idle_add(self.library_search_tooltips_enable, widget, x, y,
+            GLib.idle_add(self.search_tooltips_enable, widget, x, y,
                           keyboard_mode, None)
             return False
         treepath, _col, _x2, _y2 = pathinfo
 
-        i = self.librarydata.get_iter(treepath.get_indices()[0])
-        path = misc.escape_html(self.librarydata.get_value(i, 1).path)
-        song = self.librarydata.get_value(i, 2)
+        i = self.tree_data.get_iter(treepath.get_indices()[0])
+        path = misc.escape_html(self.tree_data.get_value(i, 1).path)
+        song = self.tree_data.get_value(i, 2)
         new_tooltip = "<b>%s:</b> %s\n<b>%s:</b> %s" \
                 % (_("Song"), song, _("Path"), path)
 
-        if new_tooltip != self.libsearch_last_tooltip:
-            self.libsearch_last_tooltip = new_tooltip
-            self.library.set_property('has-tooltip', False)
-            GLib.idle_add(self.library_search_tooltips_enable, widget, x, y,
+        if new_tooltip != self.search_last_tooltip:
+            self.search_last_tooltip = new_tooltip
+            self.tree.set_property('has-tooltip', False)
+            GLib.idle_add(self.search_tooltips_enable, widget, x, y,
                           keyboard_mode, tooltip)
             GLib.idle_add(widget.set_tooltip_markup, new_tooltip)
             return
 
-        self.libsearch_last_tooltip = new_tooltip
+        self.search_last_tooltip = new_tooltip
 
         return False #api says we should return True, but this doesn't work?
 
-    def library_search_tooltips_enable(self, widget, x, y, keyboard_mode,
-                                       tooltip):
-        self.library.set_property('has-tooltip', True)
+    def search_tooltips_enable(self, widget, x, y, keyboard_mode, tooltip):
+        self.tree.set_property('has-tooltip', True)
         if tooltip is not None:
-            self.on_library_query_tooltip(widget, x, y, keyboard_mode, tooltip)
+            self.on_query_tooltip(widget, x, y, keyboard_mode, tooltip)
 
-    def on_library_row_activated(self, _widget, path, _column=0):
+    def on_row_activated(self, _widget, path, _column=0):
         if path is None:
             # Default to last item in selection:
-            _model, selected = self.library_selection.get_selected_rows()
+            _model, selected = self.selection.get_selected_rows()
             if len(selected) >= 1:
                 path = selected[0]
             else:
                 return
-        row_iter = self.librarydata.get_iter(path)
-        value = self.librarydata.get_value(row_iter, 1)
-        row_type = self.librarydata.get_value(row_iter, 3)
+        row_iter = self.tree_data.get_iter(path)
+        value = self.tree_data.get_value(row_iter, 1)
+        row_type = self.tree_data.get_value(row_iter, 3)
         if row_type == self.view.TYPE_SONG:
             # Song found, add item
-            self.on_add_item(self.library)
+            self.on_add_item(self.tree)
         else:
-            self.library_browse(None, value)
+            self.browse(None, value)
 
-    def library_get_parent(self):
+    def get_parent(self):
         wd = self.config.wd
         path = "/"
         artist = None
@@ -1297,9 +1294,9 @@ class Library:
 
     def on_browse_parent(self):
         if not self.search_visible():
-            if self.library.is_focus():
-                value = self.library_get_parent()
-                self.library_browse(None, value)
+            if self.tree.is_focus():
+                value = self.get_parent()
+                self.browse(None, value)
                 return True
 
     def get_path_child_filenames(self, return_root):
@@ -1308,7 +1305,7 @@ class Library:
         # mpd calls we need to make. We won't want this behavior in some
         # instances, like when we want all end files for editing tags
         items = []
-        model, rows = self.library_selection.get_selected_rows()
+        model, rows = self.selection.get_selected_rows()
         for path in rows:
             row_iter = model.get_iter(path)
             data = model.get_value(row_iter, 1)
@@ -1322,7 +1319,7 @@ class Library:
                     items.append(data.path)
                 elif not return_root:
                     # Directory without root
-                    items += self.library_get_path_files_recursive(data.path)
+                    items += self.get_path_files_recursive(data.path)
                 else:
                     # Full Directory
                     items.append(data.path)
@@ -1335,18 +1332,18 @@ class Library:
         items = misc.remove_list_duplicates(items, case=True)
         return items
 
-    def library_get_path_files_recursive(self, path):
+    def get_path_files_recursive(self, path):
         results = []
         for item in self.mpd.lsinfo(path):
             if 'directory' in item:
-                results = results + self.library_get_path_files_recursive(
+                results = results + self.get_path_files_recursive(
                     item['directory'])
             elif 'file' in item:
                 results.append(item['file'])
         return results
 
     def on_search_combo_change(self, _combo=None):
-        self.config.last_search_num = self.searchcombo.get_active()
+        self.config.last_search_num = self.search_combo.get_active()
         if not self.search_visible():
             return
         self.on_search_update()
@@ -1365,7 +1362,7 @@ class Library:
         self.search_update_timeout = None
         with self.search_condition:
             self.search.search_num = self.config.last_search_num
-            self.search.search_input = self.searchtext.get_text()
+            self.search.search_input = self.search_text.get_text()
             self.search_condition.notify_all()
 
     def on_search_end(self, _button, move_focus=True):
@@ -1373,12 +1370,12 @@ class Library:
             self.search_toggle(move_focus)
 
     def search_visible(self):
-        return self.searchbutton.get_property('visible')
+        return self.search_button.get_property('visible')
 
     def search_toggle(self, move_focus):
         if not self.search_visible() and self.connected():
-            self.library.set_property('has-tooltip', True)
-            ui.show(self.searchbutton)
+            self.tree.set_property('has-tooltip', True)
+            ui.show(self.search_button)
             self.search_condition = threading.Condition()
             self.search_thread = LibrarySearchThread(self.search,
                                                      self.search_condition)
@@ -1386,10 +1383,10 @@ class Library:
             self.search_thread.connect('search_stopped', self.on_search_end)
             self.search_thread.start()
         else:
-            ui.hide(self.searchbutton)
-            self.searchtext.handler_block(self.search_changed_handler)
-            self.searchtext.set_text("")
-            self.searchtext.handler_unblock(self.search_changed_handler)
+            ui.hide(self.search_button)
+            self.search_text.handler_block(self.search_changed_handler)
+            self.search_text.set_text("")
+            self.search_text.handler_unblock(self.search_changed_handler)
             self.search_thread.stop()
             with self.search_condition:
                 self.search_condition.notify_all()
@@ -1398,32 +1395,32 @@ class Library:
             self.search_condition = None
             self.search.cleanup_search()
             # Restore the regular view
-            GLib.idle_add(self.library_browse, None, self.config.wd)
-            GLib.idle_add(ui.reset_entry_marking, self.searchtext)
+            GLib.idle_add(self.browse, None, self.config.wd)
+            GLib.idle_add(ui.reset_entry_marking, self.search_text)
             if move_focus:
-                self.library.grab_focus()
+                self.tree.grab_focus()
 
     def search_ready_cb(self, _widget, data):
         bd = [self.view.song_row(song) for song in data if 'file' in song]
         bd.sort(key=lambda key: locale.strxfrm(key[2]))
-        self.library.freeze_child_notify()
-        self.librarydata.clear()
+        self.tree.freeze_child_notify()
+        self.tree_data.clear()
         for row in bd:
-            self.librarydata.append(row)
-        self.library.thaw_child_notify()
+            self.tree_data.append(row)
+        self.tree.thaw_child_notify()
         if len(bd) == 0:
-            GLib.idle_add(ui.set_entry_invalid, self.searchtext)
+            GLib.idle_add(ui.set_entry_invalid, self.search_text)
         else:
-            GLib.idle_add(self.library.set_cursor, Gtk.TreePath.new_first(),
+            GLib.idle_add(self.tree.set_cursor, Gtk.TreePath.new_first(),
                           None, False)
-            GLib.idle_add(ui.reset_entry_marking, self.searchtext)
+            GLib.idle_add(ui.reset_entry_marking, self.search_text)
 
     def on_search_key_pressed(self, widget, event):
-        self.filter_key_pressed(widget, event, self.library)
+        self.filter_key_pressed(widget, event, self.tree)
 
     def on_search_enter(self, _entry):
-        self.on_library_row_activated(None, None)
+        self.on_row_activated(None, None)
 
     def search_set_focus(self):
-        GLib.idle_add(self.searchtext.grab_focus)
+        GLib.idle_add(self.search_text.grab_focus)
 
