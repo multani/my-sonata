@@ -952,32 +952,6 @@ class Library:
             view.invalidate_cache()
         self.search.invalidate_cache()
 
-    def on_library_scrolled(self, _widget, _event):
-        try:
-            # Use GLib.idle_add so that we can get the visible
-            # state of the treeview
-            GLib.idle_add(self._on_library_scrolled)
-        except:
-            pass
-
-    def _on_library_scrolled(self):
-        if not self.config.show_covers:
-            return
-
-        # This avoids a warning about a NULL node in get_visible_range
-        if not self.tree.props.visible:
-            return
-
-        visible_range = self.tree.get_visible_range()
-
-        if visible_range is None:
-            return
-        else:
-            start_row, end_row = visible_range
-
-        self.artwork.library_artwork_update(self.tree_data, start_row,
-                                            end_row, self.albumpb)
-
     def browse(self, _widget=None, root=None):
         # Populates the library list with entries
         if not self.connected():
@@ -1079,10 +1053,6 @@ class Library:
             # Retain pre-update selection:
             self.retain_selection(prev_selection, prev_selection_root,
                                           prev_selection_parent)
-
-        #XXX
-        # Update library artwork as necessary
-        #self.on_library_scrolled(None, None)
 
         self.update_breadcrumbs()
 
