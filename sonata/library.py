@@ -459,6 +459,15 @@ class LibraryView(object):
         # Returns the number of items stored in data
         return sum([1 for item in song_record if item is not None])
 
+    def get_parent(self, wd):
+        return self._get_parent(wd)
+
+    def _get_parent(self, wd):
+        path = '/'
+        if wd.path:
+            path = os.path.dirname(wd.path)
+        return SongRecord(path=path)
+
     def _get_crumb_data(self, keys, nkeys, parts):
         crumbs = []
         # append a crumb for each part
@@ -561,7 +570,6 @@ class LibraryView(object):
                                 album=NOTAG)
         bd += self._get_data_songs(non_albums)
         return bd
-
 
     def _get_data(self, song_record):
         # Create treeview model info
@@ -740,6 +748,11 @@ class ArtistView(LibraryView):
         self.icon = self.artist_icon
         self.label = _("Artists")
 
+    def get_parent(self, wd):
+        if wd.album is not None:
+            return SongRecord(artist=wd.artist)
+        return self._get_parent(wd)
+
     def get_data(self, song_record):
         if song_record.artist is None and song_record.album is None:
             return self._get_toplevel_data()
@@ -773,6 +786,22 @@ class GenreView(LibraryView):
         self.name = 'genre'
         self.icon = self.genre_icon
         self.label = _("Genres")
+
+    def get_parent(self, wd):
+        path = "/"
+        artist = None
+        genre = None
+
+        if wd.album is not None:
+            genre, artist = (wd.genre, wd.artist)
+            path = None
+        elif wd.artist is not None:
+            genre = wd.genre
+            path = None
+        else:
+            return self._get_parent(wd)
+
+        return SongRecord(path=path, artist=artist, genre=genre)
 
     def get_data(self, song_record):
         if song_record.genre is None:
@@ -1020,7 +1049,7 @@ class Library:
             if len(bd) == 0:
                 # Nothing found; go up a level until we reach the top level
                 # or results are found
-                self.config.wd = self.get_parent()
+                self.config.wd = self.view.get_parent(self.config.wd)
                 if self.config.wd == wd:
                     break
                 wd = self.config.wd
@@ -1234,32 +1263,10 @@ class Library:
         else:
             self.browse(None, value)
 
-    def get_parent(self):
-        wd = self.config.wd
-        path = "/"
-        artist = None
-        genre = None
-
-        if self.config.lib_view == consts.VIEW_ARTIST:
-            if wd.album is not None:
-                path = None
-                artist = wd.artist
-        elif self.config.lib_view == consts.VIEW_GENRE:
-            if wd.album is not None:
-                genre, artist = (wd.genre, wd.artist)
-                path = None
-            elif wd.artist is not None:
-                genre = wd.genre
-                path = None
-        elif wd.path:
-            path = os.path.dirname(wd.path) or '/'
-
-        return SongRecord(path=path, artist=artist, genre=genre)
-
     def on_browse_parent(self):
         if not self.search_visible():
             if self.tree.is_focus():
-                value = self.get_parent()
+                value = self.view.get_parent(self.config.wd)
                 self.browse(None, value)
                 return True
 
