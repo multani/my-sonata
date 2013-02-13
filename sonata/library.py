@@ -933,9 +933,7 @@ class Library:
                 True)
 
     def on_view_chosen(self, action):
-        # FIXME on_search_end already has this precondition
-        if self.search_visible():
-            self.on_search_end(None)
+        self.on_search_end(None)
         self.view = self.ACTION_TO_VIEW[action.get_name()]
         self.config.lib_view = self.view.view_type
         self.tree.grab_focus()

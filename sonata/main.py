@@ -1091,8 +1091,7 @@ class Base:
         if shortcut == 'BackSpace' and self.current_tab == self.TAB_LIBRARY:
             return self.library.on_browse_parent()
         elif shortcut == 'Escape':
-            if self.current_tab == self.TAB_LIBRARY \
-               and self.library.search_visible():
+            if self.current_tab == self.TAB_LIBRARY:
                 self.library.on_search_end(None)
             elif self.current_tab == self.TAB_CURRENT \
                     and self.current.filterbox_visible:
@@ -1158,8 +1157,7 @@ class Base:
             self.info_update(True)
             if self.current.filterbox_visible:
                 GLib.idle_add(self.current.searchfilter_toggle, None)
-            if self.library.search_visible():
-                self.library.on_search_end(None)
+            self.library.on_search_end(None)
             self.handle_change_song()
             self.handle_change_status()
         else:
@@ -2016,15 +2014,13 @@ class Base:
 
     def on_updatedb(self, _action):
         if self.conn:
-            if self.library.search_visible():
-                self.library.on_search_end(None)
+            self.library.on_search_end(None)
             self.mpd.update('/') # XXX we should pass a list here!
             self.mpd_update_queued = True
 
     def on_updatedb_path(self, _action):
         if self.conn and self.current_tab == self.TAB_LIBRARY:
-            if self.library.search_visible():
-                self.library.on_search_end(None)
+            self.library.on_search_end(None)
             filenames = self.library.get_path_child_filenames(True)
             if len(filenames):
                 self.mpd.update(filenames)
@@ -3058,8 +3054,7 @@ class Base:
             return
         if self.current_tab != self.TAB_LIBRARY:
             self.switch_to_tab_name(self.TAB_LIBRARY)
-        if self.library.search_visible():
-            self.library.on_search_end(None)
+        self.library.on_search_end(None)
         self.library.search_set_focus()
 
     def update_menu_visibility(self, show_songinfo_only=False):
