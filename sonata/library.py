@@ -854,7 +854,6 @@ class Library:
         self.search_thread = None
 
         self.album_crumb = None
-        self.view = None
         self.views = {}
         self.ACTION_TO_VIEW = {}
         for view in (FilesystemView(self), AlbumView(self), ArtistView(self),
@@ -862,7 +861,8 @@ class Library:
             self.views[view.view_type] = view
             self.ACTION_TO_VIEW[view.get_action_name()] = view
 
-        self.view_caches_reset() #XXX
+        self.view_caches_reset()
+        self.view = self.views[self.config.lib_view]
 
         self.tree.connect('row_activated', self.on_row_activated)
         self.tree.connect('button_press_event',
@@ -956,10 +956,6 @@ class Library:
         # Populates the library list with entries
         if not self.connected():
             return
-
-        #FIXME
-        if not self.view:
-            self.view = self.views[self.config.lib_view]
 
         default_path = SongRecord(path="/")
         active_is_filesystem = self.config.lib_view == consts.VIEW_FILESYSTEM
