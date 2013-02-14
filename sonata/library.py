@@ -8,7 +8,6 @@ import operator
 from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, GLib, Pango
 
 from sonata import ui, misc, consts, formatting, breadcrumbs
-from sonata import mpdhelper as mpdh
 from sonata.song import SongRecord
 
 VARIOUS_ARTISTS = _("Various Artists")
@@ -1372,6 +1371,8 @@ class Library:
                 self.tree.grab_focus()
 
     def search_ready_cb(self, _widget, data):
+        # FIXME kill any breadcrumb trail here (it should restore on search end
+        # if the view doesn't change)
         bd = [self.view.song_row(song) for song in data if 'file' in song]
         bd.sort(key=lambda key: locale.strxfrm(key[2]))
         self.tree.freeze_child_notify()
