@@ -42,9 +42,9 @@ def list_mark_various_artists_albums(albums):
 
 
 class LibrarySearch(object):
+    SEARCH_TERMS = ('artist', 'title', 'album', 'genre', 'file', 'any')
     def __init__(self, mpd):
         self.mpd = mpd
-        self.search_terms = ('artist', 'title', 'album', 'genre', 'file', 'any')
         self.cache_genres = None
         self.cache_artists = None
         self.cache_albums = None
@@ -233,7 +233,7 @@ class LibrarySearch(object):
 
     def request_search(self, search_thread_cb):
         # Search Thread
-        search_by = self.search_terms[self.search_num]
+        search_by = self.SEARCH_TERMS[self.search_num]
         search_base = self.search_input[:2]
         if (self.search_base is None or self.search_base != search_base or
                 self.search_by is None or self.search_by != search_by):
@@ -248,7 +248,7 @@ class LibrarySearch(object):
         # Main Thread
         # Do library search based on first two letters
         # This is cached so that similar subsearches will complete faster
-        search_by = self.search_terms[self.search_num]
+        search_by = self.SEARCH_TERMS[self.search_num]
         self.search_cache = self.mpd.search(search_by, self.search_base)
         search_thread_cb()
 
@@ -261,7 +261,7 @@ class LibrarySearch(object):
         # Note that the searching is not order specific. That is, "foo bar"
         # will match on "fools bar" and "barstool foo".
 
-        search_by = self.search_terms[self.search_num]
+        search_by = self.SEARCH_TERMS[self.search_num]
         searches = self.search_input.split(" ")
         regexps = []
         for search in searches:
@@ -385,6 +385,11 @@ class LibrarySearchThread(threading.Thread, GObject.GObject):
 
 
 class LibraryView(object):
+    TYPE_ALBUM = 'album'
+    TYPE_ARTIST = 'artist'
+    TYPE_FOLDER = 'folder'
+    TYPE_GENRE = 'genre'
+    TYPE_SONG = 'song'
     def __init__(self, library):
         self.cache = None
         self.data_rows = {}
@@ -392,12 +397,6 @@ class LibraryView(object):
         self.artwork = self.library.artwork
         self.config = self.library.config
         self.search = self.library.search
-
-        self.TYPE_ALBUM = 'album'
-        self.TYPE_ARTIST = 'artist'
-        self.TYPE_FOLDER = 'folder'
-        self.TYPE_GENRE = 'genre'
-        self.TYPE_SONG = 'song'
 
         self.artist_icon = 'sonata-artist'
         self.artist_pixbuf = self.library.tree.render_icon_pixbuf(
@@ -615,12 +614,12 @@ class LibraryView(object):
 
 
 class FilesystemView(LibraryView):
+    view_type = consts.VIEW_FILESYSTEM
+    name = 'filesystem'
+    label = _("Filesystem")
     def __init__(self, library):
         LibraryView.__init__(self, library)
-        self.view_type = consts.VIEW_FILESYSTEM
-        self.name = 'filesystem'
         self.icon = self.folder_icon
-        self.label = _("Filesystem")
 
     def get_crumb_data(self):
         path = self.config.wd.path
@@ -670,12 +669,12 @@ class FilesystemView(LibraryView):
 
 
 class AlbumView(LibraryView):
+    view_type = consts.VIEW_ALBUM
+    name = 'album'
+    label = _("Albums")
     def __init__(self, library):
         LibraryView.__init__(self, library)
-        self.view_type = consts.VIEW_ALBUM
-        self.name = 'album'
         self.icon = self.album_icon
-        self.label = _("Albums")
 
     def get_crumb_data(self):
         # We don't want to show an artist button in album view
@@ -741,12 +740,12 @@ class AlbumView(LibraryView):
 
 
 class ArtistView(LibraryView):
+    view_type = consts.VIEW_ARTIST
+    name = 'artist'
+    label = _("Artists")
     def __init__(self, library):
         LibraryView.__init__(self, library)
-        self.view_type = consts.VIEW_ARTIST
-        self.name = 'artist'
         self.icon = self.artist_icon
-        self.label = _("Artists")
 
     def get_parent(self, wd):
         if wd.album is not None:
@@ -780,12 +779,12 @@ class ArtistView(LibraryView):
 
 
 class GenreView(LibraryView):
+    view_type = consts.VIEW_GENRE
+    name = 'genre'
+    label = _("Genres")
     def __init__(self, library):
         LibraryView.__init__(self, library)
-        self.view_type = consts.VIEW_GENRE
-        self.name = 'genre'
         self.icon = self.genre_icon
-        self.label = _("Genres")
 
     def get_parent(self, wd):
         path = "/"
@@ -983,6 +982,7 @@ class Library:
         # Populates the library list with entries
         if not self.connected():
             return
+        # FIXME kill any search here
 
         default_path = SongRecord(path="/")
         active_is_filesystem = self.config.lib_view == consts.VIEW_FILESYSTEM
