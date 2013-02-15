@@ -17,7 +17,7 @@ def list_mark_various_artists_albums(albums):
     for i in range(len(albums)):
         if i + consts.NUM_ARTISTS_FOR_VA - 1 > len(albums)-1:
             break
-        VA = False
+        various_artists = False
         for j in range(1, consts.NUM_ARTISTS_FOR_VA):
             if (albums[i].album.lower() != albums[i + j].album.lower() or
                     albums[i].year  != albums[i + j].year or
@@ -27,8 +27,8 @@ def list_mark_various_artists_albums(albums):
                 albums.pop(i + j)
                 break
             if j == consts.NUM_ARTISTS_FOR_VA - 1:
-                VA = True
-        if VA:
+                various_artists = True
+        if various_artists:
             albums[i].artist = VARIOUS_ARTISTS
             j = 1
             while i + j <= len(albums) - 1:
@@ -75,15 +75,15 @@ class LibrarySearch(object):
         searches = self.get_lists(song_record)
         playtime = 0
         num_songs = 0
-        for s in searches:
-            count = self.mpd.count(*s)
+        for search in searches:
+            count = self.mpd.count(*search)
             playtime += count.playtime
             num_songs += count.songs
 
         return (playtime, num_songs)
 
     def get_list(self, search, typename, cached_list, searchlist):
-        s = []
+        results = []
         skip_type = (typename == 'artist' and search == VARIOUS_ARTISTS)
         if search is not None and not skip_type:
             if search == NOTAG:
@@ -104,35 +104,36 @@ class LibrarySearch(object):
             for item in itemlist:
                 if len(searchlist) > 0:
                     for item2 in searchlist:
-                        s.append(item2 + (typename, item))
+                        results.append(item2 + (typename, item))
                 else:
-                    s.append((typename, item))
+                    results.append((typename, item))
         else:
-            s = searchlist
-        return s, cached_list
+            results = searchlist
+        return results, cached_list
 
     def get_lists(self, song_record):
-        s = []
-        s, self.cache_genres = self.get_list(song_record.genre, 'genre',
-                                             self.cache_genres, s)
-        if s is None:
+        results = []
+        results, self.cache_genres = self.get_list(song_record.genre, 'genre',
+                                                   self.cache_genres, results)
+        if results is None:
             return []
-        s, self.cache_artists = self.get_list(song_record.artist, 'artist',
-                                              self.cache_artists, s)
-        if s is None:
+        results, self.cache_artists = self.get_list(song_record.artist,
+                                                    'artist',
+                                                    self.cache_artists, results)
+        if results is None:
             return []
-        s, self.cache_albums = self.get_list(song_record.album, 'album',
-                                             self.cache_albums, s)
-        if s is None:
+        results, self.cache_albums = self.get_list(song_record.album, 'album',
+                                                   self.cache_albums, results)
+        if results is None:
             return []
-        s, self.cache_years = self.get_list(song_record.year, 'date',
-                                            self.cache_years, s)
-        if s is None:
+        results, self.cache_years = self.get_list(song_record.year, 'date',
+                                                  self.cache_years, results)
+        if results is None:
             return []
-        return s
+        return results
 
     def get_search(self, search, typename, searchlist):
-        s = []
+        results = []
         skip_type = (typename == 'artist' and search == VARIOUS_ARTISTS)
         if search is not None and not skip_type:
             if search == NOTAG:
@@ -142,20 +143,20 @@ class LibrarySearch(object):
             for item in itemlist:
                 if len(searchlist) > 0:
                     for item2 in searchlist:
-                        s.append(item2 + (typename, item))
+                        results.append(item2 + (typename, item))
                 else:
-                    s.append((typename, item))
+                    results.append((typename, item))
         else:
-            s = searchlist
-        return s
+            results = searchlist
+        return results
 
     def get_searches(self, song_record):
-        s = []
-        s = self.get_search(song_record.genre, 'genre', s)
-        s = self.get_search(song_record.album, 'album', s)
-        s = self.get_search(song_record.artist, 'artist', s)
-        s = self.get_search(song_record.year, 'date', s)
-        return s
+        results = []
+        results = self.get_search(song_record.genre, 'genre', results)
+        results = self.get_search(song_record.album, 'album', results)
+        results = self.get_search(song_record.artist, 'artist', results)
+        results = self.get_search(song_record.year, 'date', results)
+        return results
 
     def get_search_items(self, song_record):
         # Returns all mpd items, using mpd's 'search', along with
@@ -166,8 +167,8 @@ class LibrarySearch(object):
         results = []
 
         searches = self.get_searches(song_record)
-        for s in searches:
-            args_tuple = tuple(map(str, s))
+        for search in searches:
+            args_tuple = tuple(map(str, search))
 
             if len(args_tuple) == 0:
                 return None, 0, 0
@@ -196,15 +197,15 @@ class LibrarySearch(object):
         results = []
         searches = self.get_lists(song_record)
         if len(searches) > 0:
-            for s in searches:
+            for search in searches:
                 # If we have untagged tags (''), use search instead
                 # of list because list will not return anything.
-                if '' in s:
+                if '' in search:
                     songs, _playtime, _num_songs =  self.get_search_items(
                         song_record)
                     items = [song.get(itemtype, '') for song in songs]
                 else:
-                    items = self.mpd.list(itemtype, *s)
+                    items = self.mpd.list(itemtype, *search)
                 results.extend([item for item in items if len(item) > 0])
         else:
             no_search = [val is None for val in (song_record.genre,
@@ -478,20 +479,21 @@ class LibraryView(object):
                 continue
             partdata = dict(list(zip(keys, parts))[:i + 1])
             target = SongRecord(**partdata)
-            pb, icon = None, None
+            pixbuf, icon = None, None
             if key == 'album':
                 # Album artwork, with self.album_icon as a backup:
                 cache_data = SongRecord(artist=self.config.wd.artist,
                                         album=self.config.wd.album,
                                         path=self.config.wd.path)
-                pb = self.artwork.get_album_row_pixbuf(cache_data, priority=9)
-                if not pb:
+                pixbuf = self.artwork.get_album_row_pixbuf(cache_data,
+                                                           priority=9)
+                if not pixbuf:
                     icon = self.album_icon
             elif key == 'artist':
                 icon = self.artist_icon
             else:
                 icon = self.genre_icon
-            crumbs.append((part, icon, pb, target))
+            crumbs.append((part, icon, pixbuf, target))
         return crumbs
 
     def get_crumb_data(self):
@@ -557,15 +559,15 @@ class LibraryView(object):
                     row_data = [self.album_pixbuf, album_data, display,
                                 self.TYPE_ALBUM]
                     bd += [(ordered_year + misc.lower_no_the(album), row_data)]
-        # Sort early to add pb in display order
+        # Sort early to add pixbuf in display order
         bd.sort(key=lambda key: locale.strxfrm(key[0]))
         for album_row in bd:
             data = album_row[1][1]
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
-            pb = self.artwork.get_album_row_pixbuf(cache_key)
-            if pb:
-                album_row[1][0] = pb
+            pixbuf = self.artwork.get_album_row_pixbuf(cache_key)
+            if pixbuf:
+                album_row[1][0] = pixbuf
         # Now, songs not in albums:
         non_albums = SongRecord(genre=song_record.genre,
                                 artist=song_record.artist,
@@ -735,9 +737,9 @@ class AlbumView(LibraryView):
             data = album[1][1]
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
-            pb = self.artwork.get_album_row_pixbuf(cache_key)
-            if pb:
-                album[1][0] = pb
+            pixbuf = self.artwork.get_album_row_pixbuf(cache_key)
+            if pixbuf:
+                album[1][0] = pixbuf
         self.cache = bd
         return bd
 
@@ -1063,9 +1065,9 @@ class Library:
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
             if cache_key in self.artwork.cache:
-                pb = self.artwork.get_album_row_pixbuf(cache_key)
-                if pb:
-                    self.set_pb_for_row(index, pb)
+                pixbuf = self.artwork.get_album_row_pixbuf(cache_key)
+                if pixbuf:
+                    self.set_pb_for_row(index, pixbuf)
                 
             self.view.data_rows[cache_key] = index
 
@@ -1082,9 +1084,9 @@ class Library:
 
         self.update_breadcrumbs()
 
-    def set_pb_for_row(self, row, pb):
+    def set_pb_for_row(self, row, pixbuf):
         i = self.tree_data.get_iter((row,))
-        self.tree_data.set_value(i, 0, pb)
+        self.tree_data.set_value(i, 0, pixbuf)
 
     def pixbuf_for_album_crumb(self, data=None, force=False):
         if self.album_crumb:
@@ -1092,25 +1094,26 @@ class Library:
                                     album=self.config.wd.album,
                                     path=self.config.wd.path)
             if force or cache_data == data:
-                pb = self.artwork.get_album_row_pixbuf(cache_data)
-                if pb:
-                    pb = pb.scale_simple(16, 16, GdkPixbuf.InterpType.HYPER)
-                    self.album_crumb.image.set_from_pixbuf(pb)
+                pixbuf = self.artwork.get_album_row_pixbuf(cache_data)
+                if pixbuf:
+                    pixbuf = pixbuf.scale_simple(16, 16,
+                                                 GdkPixbuf.InterpType.HYPER)
+                    self.album_crumb.image.set_from_pixbuf(pixbuf)
 
     def art_ready_cb(self, widget, data):
         self.pixbuf_for_album_crumb(data)
         if not data in self.view.data_rows:
             return
-        pb = self.artwork.get_album_row_pixbuf(data)
-        if pb:
+        pixbuf = self.artwork.get_album_row_pixbuf(data)
+        if pixbuf:
             # lookup for existing row
             row = self.view.data_rows[data]
-            self.set_pb_for_row(row, pb)
+            self.set_pb_for_row(row, pixbuf)
 
     def update_breadcrumbs(self):
         # remove previous buttons
-        for b in self.breadcrumbs:
-            self.breadcrumbs.remove(b)
+        for crumb in self.breadcrumbs:
+            self.breadcrumbs.remove(crumb)
 
         label = self.view.label
 
@@ -1123,9 +1126,9 @@ class Library:
             self.crumb_section.disconnect(self.crumb_section_handler)
 
         self.album_crumb = None
-        crumbs = self.view.get_crumb_data()
+        crumbs_data = self.view.get_crumb_data()
 
-        if not len(crumbs):
+        if not len(crumbs_data):
             self.crumb_section.set_active(True)
             context = self.crumb_section.get_style_context()
             context.add_class('last_crumb')
@@ -1138,33 +1141,34 @@ class Library:
             self.browse, SongRecord(path='/'))
 
         # add a button for each crumb
-        for crumb in crumbs:
-            text, icon, pb, target = crumb
+        for crumb_data in crumbs_data:
+            text, icon, pixbuf, target = crumb_data
             text = misc.escape_html(text)
             label = Gtk.Label(text, use_markup=True)
 
             if icon:
                 image = Gtk.Image.new_from_stock(icon, Gtk.IconSize.MENU)
-            elif pb:
-                pb = pb.scale_simple(16, 16, GdkPixbuf.InterpType.HYPER)
-                image = Gtk.Image.new_from_pixbuf(pb)
+            elif pixbuf:
+                pixbuf = pixbuf.scale_simple(16, 16,
+                                             GdkPixbuf.InterpType.HYPER)
+                image = Gtk.Image.new_from_pixbuf(pixbuf)
 
-            b = breadcrumbs.CrumbButton(image, label)
+            crumb = breadcrumbs.CrumbButton(image, label)
 
             if icon == 'sonata-album':
-                self.album_crumb = b
+                self.album_crumb = crumb
                 self.pixbuf_for_album_crumb(force=True)
 
-            if crumb is crumbs[-1]:
+            if crumb_data is crumbs_data[-1]:
                 # FIXME makes the button request minimal space:
-                b.set_active(True)
-                context = b.get_style_context()
+                crumb.set_active(True)
+                context = crumb.get_style_context()
                 context.add_class('last_crumb')
 
-            b.set_tooltip_text(label.get_label())
-            b.connect('toggled', self.browse, target)
-            self.breadcrumbs.pack_start(b, False, False, 0)
-            b.show_all()
+            crumb.set_tooltip_text(label.get_label())
+            crumb.connect('toggled', self.browse, target)
+            self.breadcrumbs.pack_start(crumb, False, False, 0)
+            crumb.show_all()
 
     def retain_selection(self, prev_selection, prev_selection_root,
                          prev_selection_parent):
