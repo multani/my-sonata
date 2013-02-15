@@ -389,6 +389,10 @@ class LibraryView(object):
     TYPE_FOLDER = 'folder'
     TYPE_GENRE = 'genre'
     TYPE_SONG = 'song'
+    view_type = None
+    name = None
+    label = None
+    icon = None
     def __init__(self, library):
         self.cache = None
         self.data_rows = {}
