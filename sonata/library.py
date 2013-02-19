@@ -1410,11 +1410,10 @@ class Library:
         for path in rows:
             row_iter = model.get_iter(path)
             data = model.get_value(row_iter, 1)
-            value = model.get_value(row_iter, 2)
             row_type = model.get_value(row_iter, 3)
             meta_parts = [data.album, data.artist, data.year, data.genre]
             meta = any([part is None for part in meta_parts])
-            if data.path is not None and not any(meta_parts): #FIXME
+            if data.path is not None and not meta:
                 if row_type == self.view.TYPE_SONG:
                     # File
                     items.append(data.path)
