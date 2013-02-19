@@ -1,3 +1,21 @@
+"""The Library module provides UI and data handling for the Library tab.
+
+   It is split into eight classes (order of appearance):
+   * LibrarySearch -- Handles data gathering from MPD and filtering for the
+   filter search.
+   * LibrarySearchThread -- Handles the threading aspect of filter search.
+   Actual data portions are on LibrarySearch, to keep this simpler.
+   * LibraryView -- Parent class for the used views:
+   * FilesystemView -- A view of the actual folders/song files as they exist.
+   * AlbumView -- A view grouping song files by album.
+   * ArtistView -- A view grouping albums and song files by artist.
+   * GenreView -- A view grouping artists, albums, and song files by genre.
+   * Library -- The main class for coordinating the others and UI handling once
+   a view is selected.
+
+   The *View classes are used for view creation, not UI interaction.
+"""
+
 import os
 import re
 import gettext
@@ -41,6 +59,8 @@ def list_mark_various_artists_albums(albums):
 
 
 class LibrarySearch(object):
+    """Handle data gathering for the *View classes and the LibrarySearchThread.
+    """
     SEARCH_TERMS = ('artist', 'title', 'album', 'genre', 'file', 'any')
     def __init__(self, mpd):
         self.mpd = mpd
@@ -67,6 +87,7 @@ class LibrarySearch(object):
         self.cache_years = None
 
     def get_count(self, song_record):
+        """Return playing time and song count matching the SongRecord."""
         # Because mpd's 'count' is case sensitive, we have to
         # determine all equivalent items (case insensitive) and
         # call 'count' for each of them. Using 'list' + 'count'
@@ -83,6 +104,11 @@ class LibrarySearch(object):
         return (playtime, num_songs)
 
     def get_list(self, search, typename, cached_list, searchlist):
+        """Return items matching `search` for type `typename`, plus cache.
+
+           If `searchlist` is supplied, the matching will extend the
+           existing matches with the new property.
+        """
         results = []
         skip_type = (typename == 'artist' and search == VARIOUS_ARTISTS)
         if search is not None and not skip_type:
@@ -112,6 +138,11 @@ class LibrarySearch(object):
         return results, cached_list
 
     def get_lists(self, song_record):
+        """Compile a list of songs matching the given SongRecord.
+
+           The results are cumulative, meaning that our end result will be
+           songs that match all the supplied parts of the SongRecord.
+        """
         results = []
         results, self.cache_genres = self.get_list(song_record.genre, 'genre',
                                                    self.cache_genres, results)
@@ -133,6 +164,8 @@ class LibrarySearch(object):
         return results
 
     def get_search(self, search, typename, searchlist):
+        """Return list of MPD-searchable items for the `search` and `typename`.
+        """
         results = []
         skip_type = (typename == 'artist' and search == VARIOUS_ARTISTS)
         if search is not None and not skip_type:
@@ -151,6 +184,7 @@ class LibrarySearch(object):
         return results
 
     def get_searches(self, song_record):
+        """Break the given SongRecord into useful searches."""
         results = []
         results = self.get_search(song_record.genre, 'genre', results)
         results = self.get_search(song_record.album, 'album', results)
@@ -159,6 +193,7 @@ class LibrarySearch(object):
         return results
 
     def get_search_items(self, song_record):
+        """For the SongRecord find matching items by searching on its parts."""
         # Returns all mpd items, using mpd's 'search', along with
         # playtime and num_songs.
 
@@ -189,6 +224,7 @@ class LibrarySearch(object):
         return (results, int(playtime), num_songs)
 
     def get_list_items(self, itemtype, song_record, ignore_case=True):
+        """For the `itemtype` and SongRecord, return all matching songs."""
         # Returns all items of tag 'itemtype', in alphabetical order,
         # using mpd's 'list'. If searchtype is passed, use
         # a case insensitive search, via additional 'list'
@@ -221,6 +257,9 @@ class LibrarySearch(object):
         return results
 
     def cleanup_search(self):
+        """Reset the state of the instance attributes used for filter search.
+           As this is simple, it runs on main thread.
+        """
         # Main Thread
         self.search_num = None
         self.search_input = None
@@ -232,6 +271,11 @@ class LibrarySearch(object):
         self.subsearch = False
 
     def request_search(self, search_thread_cb):
+        """Update instance attributes for filter search.
+           This runs on search thread, but will ask for refresh of the
+           data cache (of all matches to the first two input characters)
+           if they have changed.  That will occur on main thread.
+        """
         # Search Thread
         search_by = self.SEARCH_TERMS[self.search_num]
         search_base = self.search_input[:2]
@@ -245,6 +289,8 @@ class LibrarySearch(object):
             search_thread_cb()
 
     def perform_search(self, search_thread_cb):
+        """Cache all results matching the first two letters for filter search.
+        """
         # Main Thread
         # Do library search based on first two letters
         # This is cached so that similar subsearches will complete faster
@@ -253,6 +299,7 @@ class LibrarySearch(object):
         search_thread_cb()
 
     def filter_search_data(self):
+        """Perform the actual filtering of the cached data by the input."""
         # Search Thread
         # Now, use filtering similar to playlist filtering:
         # this make take some seconds... and we'll escape the search text
@@ -295,6 +342,7 @@ class LibrarySearch(object):
 # Without doing this, the results are not stable, though it does make our
 # code more complicated to do it this way.
 class LibrarySearchThread(threading.Thread, GObject.GObject):
+    """Handle the threading coordination for filter search."""
     # search_ready means the results are there to be loaded in the UI
     # search_stopped means the thread has nothing to do and should be ended
     # until new data is available
@@ -317,21 +365,34 @@ class LibrarySearchThread(threading.Thread, GObject.GObject):
         self.search_num = None
 
     def stop(self):
+        """Set the thread to stop, which means it will go away.
+           This is called by the main thread.
+        """
         self._stop_event.set()
 
     def stopped(self):
+        """Return boolean: is the thread stopped?"""
         return self._stop_event.is_set()
 
     def ready(self):
+        """Set the thread to ready, which means it has the data for filtering.
+        """
         self._ready_event.set()
 
     def done(self):
+        """Set the thread to not ready, meaning its current search is done."""
         self._ready_event.clear()
 
     def awaiting_data(self):
+        """Return boolean: is the thread waiting for data?"""
         return not self._ready_event.is_set()
 
     def run(self):
+        """Thread loop, will run until the _stop_event is True.
+
+           That happens when either it can't find anything to search, or
+           the user stops it.
+        """
         while True:
             input_changed = False
             self.condition.acquire()
@@ -364,12 +425,19 @@ class LibrarySearchThread(threading.Thread, GObject.GObject):
                 GLib.idle_add(self.emit, 'search_stopped', False)
 
     def ready_cb(self):
+        """We have data and can proceed to filtering it.
+           Either the updated cache is waiting or no cache change needed.
+        """
         # Main Thread, Search Threads (see LibrarySearch.request_search)
         self.ready()
         with self.condition:
             self.condition.notify_all()
 
     def request_search(self):
+        """Request a search from LibrarySearch.
+           This wrapper keeps the condition from being propagated to
+           LibrarySearch.
+        """
         # Search Thread
         # Simple wrapper for holding the condition and not signaling if no
         # change in results
@@ -378,6 +446,9 @@ class LibrarySearchThread(threading.Thread, GObject.GObject):
             self.condition.notify_all()
 
     def filter_search_data(self):
+        """Request LibrarySearch to filter the cache.
+           If results exist, asks the main thread to update the view.
+        """
         # Search Thread
         search_data = self.search.filter_search_data()
         if search_data is not None:
@@ -385,6 +456,7 @@ class LibrarySearchThread(threading.Thread, GObject.GObject):
 
 
 class LibraryView(object):
+    """Base View class with methods common to two or more children."""
     TYPE_ALBUM = 'album'
     TYPE_ARTIST = 'artist'
     TYPE_FOLDER = 'folder'
@@ -427,6 +499,7 @@ class LibraryView(object):
         self.invalidate_row_cache()
 
     def add_display_info(self, num_songs, playtime):
+        """Common formatter for extra data to artist, album, and genre rows."""
         seconds = int(playtime)
         hours   = seconds // 3600
         seconds -= 3600 * hours
@@ -458,20 +531,28 @@ class LibraryView(object):
         return (self.get_action_name(), self.icon, self.label, None, None,
                 action)
 
-    def get_data_level(self, song_record):
+    def get_data_level(self, song_record):# FIXME not SongRecord
         # Returns the number of items stored in data
         return sum([1 for item in song_record if item is not None])
 
     def get_parent(self, wd):
+        """Return the result of _get_parent.
+           This wraps because _get_parent is specialized for subclasses.
+        """
         return self._get_parent(wd)
 
     def _get_parent(self, wd):
+        """Return a SongRecord for the parent of the current selection."""
         path = '/'
         if wd.path:
             path = os.path.dirname(wd.path)
         return SongRecord(path=path)
 
     def _get_crumb_data(self, keys, nkeys, parts):
+        """Get breadcrumb data for the specified parts.
+           Only FilesystemView doesn't use this.  The other views specify
+           which parts to get crumbs for.
+        """
         crumbs = []
         # append a crumb for each part
         for i, key, part in zip(range(nkeys), keys, parts):
@@ -497,6 +578,9 @@ class LibraryView(object):
         return crumbs
 
     def get_crumb_data(self):
+        """Get the crumb data for genre, artist, or album.
+           This is "full depth."
+        """
         keys = 'genre', 'artist', 'album'
         nkeys = 3
         parts = (self.config.wd.genre, self.config.wd.artist,
@@ -507,6 +591,7 @@ class LibraryView(object):
         pass
 
     def _get_artists_data(self, song_record):
+        """Private method to get all artists matching the SongRecord."""
         bd = []
         if song_record.genre is None:
             return bd
@@ -527,6 +612,7 @@ class LibraryView(object):
         return bd
 
     def _get_albums_data(self, song_record):
+        """Private method to get all albums matching the SongRecord."""
         bd = []
         if song_record.artist is None:
             return bd
@@ -576,6 +662,7 @@ class LibraryView(object):
         return bd
 
     def _get_data(self, song_record):
+        """Private method to gather all rows for a SongRecord."""
         # Create treeview model info
         bd = []
         genre, artist, album = (song_record.genre, song_record.artist,
@@ -598,6 +685,7 @@ class LibraryView(object):
                 self.TYPE_SONG]
 
     def _get_data_songs(self, song_record):
+        """Private method to get all songs matching the SongRecord."""
         bd = []
         songs, _playtime, _num_songs = self.search.get_search_items(song_record)
 
@@ -619,6 +707,7 @@ class LibraryView(object):
 
 
 class FilesystemView(LibraryView):
+    """View for the raw filesystem."""
     view_type = consts.VIEW_FILESYSTEM
     name = 'filesystem'
     label = _("Filesystem")
@@ -627,6 +716,7 @@ class FilesystemView(LibraryView):
         self.icon = self.folder_icon
 
     def get_crumb_data(self):
+        """Breadcrumb gatherer for crumbs representing directories."""
         path = self.config.wd.path
         crumbs = []
         if path and path != '/':
@@ -640,8 +730,8 @@ class FilesystemView(LibraryView):
             crumbs.append((part, Gtk.STOCK_OPEN, None, target))
         return crumbs
 
-    def get_data_level(self, song_record):
-        # Returns the number of directories down:
+    def get_data_level(self, song_record): # FIXME not SongRecord
+        """Return how deep in the directory hierarchy we are."""
         if song_record.path == '/':
             # Every other path doesn't start with "/", so
             # start the level numbering at -1
@@ -650,6 +740,7 @@ class FilesystemView(LibraryView):
             return song_record.path.count("/")
 
     def _get_data(self, song_record):
+        """Get all songs, directories for the SongRecord (on its `path`)."""
         path = song_record.path
         # List all dirs/files at path
         if path == '/' and self.cache is not None:
@@ -674,6 +765,7 @@ class FilesystemView(LibraryView):
 
 
 class AlbumView(LibraryView):
+    """View grouping songs by album."""
     view_type = consts.VIEW_ALBUM
     name = 'album'
     label = _("Albums")
@@ -682,18 +774,24 @@ class AlbumView(LibraryView):
         self.icon = self.album_icon
 
     def get_crumb_data(self):
+        """Only get a crumb for the album.
+           AlbumView can only be one level below top: an album is selected.
+        """
         # We don't want to show an artist button in album view
+        # FIXME need genre?!
         keys = 'genre', 'album'
         nkeys = 2
         parts = (self.config.wd.genre, self.config.wd.album)
         return self._get_crumb_data(keys, nkeys, parts)
 
     def get_data(self, song_record):
+        """Return view rows, either all albums or songs for selected album."""
         if song_record.album is None:
             return self._get_toplevel_data()
         return self._get_data(song_record)
 
     def _get_toplevel_data(self):
+        """All the albums we know of, including a row for untagged."""
         if self.cache is not None:
             return self.cache
         albums = []
@@ -745,6 +843,7 @@ class AlbumView(LibraryView):
 
 
 class ArtistView(LibraryView):
+    """View grouping songs and albums by artist."""
     view_type = consts.VIEW_ARTIST
     name = 'artist'
     label = _("Artists")
@@ -753,16 +852,21 @@ class ArtistView(LibraryView):
         self.icon = self.artist_icon
 
     def get_parent(self, wd):
+        """Return a SongRecord for the parent of the current selection.
+           Either an artist (if at album), or root.
+        """
         if wd.album is not None:
             return SongRecord(artist=wd.artist)
         return self._get_parent(wd)
 
     def get_data(self, song_record):
+        """Return view rows, either all artists or data for selected."""
         if song_record.artist is None and song_record.album is None:
             return self._get_toplevel_data()
         return self._get_data(song_record)
 
     def _get_toplevel_data(self):
+        """Return the artists we know of, including a row for untagged."""
         if self.cache is not None:
             return self.cache
         artists = self.search.get_list_items('artist', SongRecord())
@@ -784,6 +888,7 @@ class ArtistView(LibraryView):
 
 
 class GenreView(LibraryView):
+    """View grouping songs, albums, and artists by genre."""
     view_type = consts.VIEW_GENRE
     name = 'genre'
     label = _("Genres")
@@ -792,6 +897,9 @@ class GenreView(LibraryView):
         self.icon = self.genre_icon
 
     def get_parent(self, wd):
+        """Return a SongRecord for the parent of the current selection.
+           Either an artist (if at album), a genre (if at artist), or root.
+        """
         path = "/"
         artist = None
         genre = None
@@ -808,11 +916,13 @@ class GenreView(LibraryView):
         return SongRecord(path=path, artist=artist, genre=genre)
 
     def get_data(self, song_record):
+        """Return view rows, either all genres or data for selected."""
         if song_record.genre is None:
             return self._get_toplevel_data()
         return self._get_data(song_record)
 
     def _get_toplevel_data(self):
+        """Return rows for all genres, including one for untagged items."""
         if self.cache is not None:
             return self.cache
         genres = self.search.get_list_items('genre', SongRecord())
@@ -834,6 +944,7 @@ class GenreView(LibraryView):
 
 
 class Library:
+    """Main Library class, handles UI interaction and coordination."""
     def __init__(self, config, mpd, artwork, TAB_LIBRARY, settings_save,
                  filter_key_pressed, on_add_item, connected,
                  on_library_button_press, add_tab, get_multicd_album_root_dir):
@@ -937,6 +1048,7 @@ class Library:
         self.selection.set_mode(Gtk.SelectionMode.MULTIPLE)
 
     def get_actions(self):
+        """Return the appropriate actions for the view popup menu."""
         return [view.get_action(self.on_view_chosen)
             for view in self.views.values()]
 
@@ -984,7 +1096,7 @@ class Library:
         self.search.invalidate_cache()
 
     def browse(self, _widget=None, root=None):
-        # Populates the library list with entries
+        """Populate the library tree with entries."""
         if not self.connected():
             return
         # FIXME kill any search here
@@ -1089,6 +1201,7 @@ class Library:
         self.tree_data.set_value(i, 0, pixbuf)
 
     def pixbuf_for_album_crumb(self, data=None, force=False):
+        """Set the artwork for a breadcrumb representing an album."""
         if self.album_crumb:
             cache_data = SongRecord(artist=self.config.wd.artist,
                                     album=self.config.wd.album,
@@ -1101,6 +1214,7 @@ class Library:
                     self.album_crumb.image.set_from_pixbuf(pixbuf)
 
     def art_ready_cb(self, widget, data):
+        """Signal callback, occurs when the row matching `data` has its art."""
         self.pixbuf_for_album_crumb(data)
         if not data in self.view.data_rows:
             return
@@ -1111,6 +1225,7 @@ class Library:
             self.set_pb_for_row(row, pixbuf)
 
     def update_breadcrumbs(self):
+        """Empty and refill the breadcrumb widget with the current data."""
         # remove previous buttons
         for crumb in self.breadcrumbs:
             self.breadcrumbs.remove(crumb)
@@ -1185,6 +1300,7 @@ class Library:
             self.selection.select_path((1,))
 
     def set_view(self, select_items=True):
+        """Scroll and (optionally) select the proper items in the view."""
         # select_items should be false if the same directory has merely
         # been refreshed (updated)
         try:
@@ -1208,11 +1324,17 @@ class Library:
                     pass
 
     def on_key_press(self, widget, event):
+        """Via signal: user pressed a key.
+           For Enter keypress, we activate the selected row.
+        """
         if event.keyval == Gdk.keyval_from_name('Return'):
             self.on_row_activated(widget, widget.get_cursor()[0])
             return True
 
     def on_query_tooltip(self, widget, x, y, keyboard_mode, tooltip):
+        """Via signal: user is hovered over a row in filter search mode.
+           We show a tooltip indicating row details.
+        """
         if keyboard_mode or not self.search_visible():
             widget.set_tooltip_text("")
             return False
@@ -1271,6 +1393,7 @@ class Library:
             self.browse(None, value)
 
     def on_browse_parent(self):
+        """Move one level up the view hierarchy."""
         if not self.search_visible():
             if self.tree.is_focus():
                 value = self.view.get_parent(self.config.wd)
@@ -1291,7 +1414,7 @@ class Library:
             row_type = model.get_value(row_iter, 3)
             meta_parts = [data.album, data.artist, data.year, data.genre]
             meta = any([part is None for part in meta_parts])
-            if data.path is not None and not any(meta_parts):
+            if data.path is not None and not any(meta_parts): #FIXME
                 if row_type == self.view.TYPE_SONG:
                     # File
                     items.append(data.path)
@@ -1321,12 +1444,17 @@ class Library:
         return results
 
     def on_search_combo_change(self, _combo=None):
+        """Via signal: user has changed the type of filter search."""
         self.config.last_search_num = self.search_combo.get_active()
         if not self.search_visible():
             return
         self.on_search_update()
 
     def on_search_update(self, _widget=None):
+        """Via signal: user has changed the input for filter search.
+           This guards against rapid changes, waiting until the user hasn't
+           modified the search for a bit.
+        """
         if not self.search_visible():
             self.search_toggle(None)
         # Only update the search if 300ms pass without a change in Gtk.Entry
@@ -1337,6 +1465,7 @@ class Library:
         self.search_update_timeout = GLib.timeout_add(300, self.update_search)
 
     def update_search(self):
+        """Update the filter search parameters."""
         self.search_update_timeout = None
         with self.search_condition:
             self.search.search_num = self.config.last_search_num
@@ -1344,13 +1473,19 @@ class Library:
             self.search_condition.notify_all()
 
     def on_search_end(self, _button, move_focus=True):
+        """Via signal or direct call: filter search is finished, hide it.
+           Consumers expect this to guard visibility, instead of guarding
+           themselves.
+        """
         if self.search_visible():
             self.search_toggle(move_focus)
 
     def search_visible(self):
+        """Return boolean: is the filter search visible?"""
         return self.search_button.get_property('visible')
 
     def search_toggle(self, move_focus):
+        """Show or hide the filter search."""
         if not self.search_visible() and self.connected():
             self.tree.set_property('has-tooltip', True)
             ui.show(self.search_button)
