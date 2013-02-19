@@ -548,7 +548,7 @@ class LibraryView(object):
             path = os.path.dirname(wd.path)
         return SongRecord(path=path)
 
-    def _get_crumb_data(self, keys, nkeys, parts):
+    def _crumb_data_by_parts(self, keys, nkeys, parts):
         """Get breadcrumb data for the specified parts.
            Only FilesystemView doesn't use this.  The other views specify
            which parts to get crumbs for.
@@ -578,14 +578,12 @@ class LibraryView(object):
         return crumbs
 
     def get_crumb_data(self):
-        """Get the crumb data for genre, artist, or album.
-           This is "full depth."
-        """
-        keys = 'genre', 'artist', 'album'
+        """Get the crumb data for genre, artist, or album."""
+        keys = ('genre', 'artist', 'album')
         nkeys = 3
         parts = (self.config.wd.genre, self.config.wd.artist,
                  self.config.wd.album)
-        return self._get_crumb_data(keys, nkeys, parts)
+        return self._crumb_data_by_parts(keys, nkeys, parts)
 
     def _get_toplevel_data(self):
         pass
@@ -774,15 +772,14 @@ class AlbumView(LibraryView):
         self.icon = self.album_icon
 
     def get_crumb_data(self):
-        """Only get a crumb for the album.
-           AlbumView can only be one level below top: an album is selected.
+        """Get the crumb data for album.
+           Overrides the default because the artist will be set when we select
+           an album, which would give us a false breadcrumb.
         """
-        # We don't want to show an artist button in album view
-        # FIXME need genre?!
-        keys = 'genre', 'album'
-        nkeys = 2
-        parts = (self.config.wd.genre, self.config.wd.album)
-        return self._get_crumb_data(keys, nkeys, parts)
+        keys = ('album',)
+        nkeys = 1
+        parts = (self.config.wd.album,)
+        return self._crumb_data_by_parts(keys, nkeys, parts)
 
     def get_data(self, song_record):
         """Return view rows, either all albums or songs for selected album."""
