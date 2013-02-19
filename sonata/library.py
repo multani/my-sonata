@@ -531,9 +531,9 @@ class LibraryView(object):
         return (self.get_action_name(), self.icon, self.label, None, None,
                 action)
 
-    def get_data_level(self, song_record):# FIXME not SongRecord
+    def get_data_level(self, data):
         # Returns the number of items stored in data
-        return sum([1 for item in song_record if item is not None])
+        return sum([1 for item in data if item is not None])
 
     def get_parent(self, wd):
         """Return the result of _get_parent.
@@ -730,14 +730,14 @@ class FilesystemView(LibraryView):
             crumbs.append((part, Gtk.STOCK_OPEN, None, target))
         return crumbs
 
-    def get_data_level(self, song_record): # FIXME not SongRecord
+    def get_data_level(self, data):
         """Return how deep in the directory hierarchy we are."""
-        if song_record.path == '/':
+        if data.path == '/':
             # Every other path doesn't start with "/", so
             # start the level numbering at -1
             return -1
         else:
-            return song_record.path.count("/")
+            return data.path.count("/")
 
     def _get_data(self, song_record):
         """Get all songs, directories for the SongRecord (on its `path`)."""
