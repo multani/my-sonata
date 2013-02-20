@@ -1383,7 +1383,7 @@ class Base:
                 column = self.current.columns[0]
             elif self.current_tab == self.TAB_LIBRARY:
                 widget = self.library_treeview
-                column = self.library.column
+                column = self.library.tree.get_column(0)
             elif self.current_tab == self.TAB_PLAYLISTS:
                 widget = self.playlists_treeview
                 column = self.playlists.playlistscolumn
