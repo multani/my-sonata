@@ -966,7 +966,6 @@ class Library:
         self.builder = ui.builder('library')
         self.css_provider = ui.css_provider('library')
 
-        self.vbox = self.builder.get_object('library_page_v_box')
         self.tree = self.builder.get_object('library_page_treeview')
         self.selection = self.tree.get_selection()
         self.breadcrumbs = self.builder.get_object('library_crumbs_box')
@@ -989,7 +988,8 @@ class Library:
         tab_label = self.builder.get_object('library_tab_label')
         tab_label.set_text(TAB_LIBRARY)
 
-        self.tab = add_tab(self.vbox, tab_label_widget, TAB_LIBRARY, self.tree)
+        self.tab = add_tab(self.get_widgets(), tab_label_widget, TAB_LIBRARY,
+                           self.tree)
 
         self.search = LibrarySearch(self.mpd)
         self.search_thread = None
@@ -1050,7 +1050,7 @@ class Library:
             for view in self.views.values()]
 
     def get_widgets(self):
-        return self.vbox
+        return self.builder.get_object('library_page_v_box')
 
     def get_treeview(self):
         return self.tree
