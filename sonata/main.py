@@ -766,7 +766,7 @@ class Base:
         self.streamsdata = self.streams.get_model()
 
         # Initialize library data and widget
-        self.librarydata = self.library.get_model()
+        self.librarydata = self.library_treeview.get_model()
 
         icon = self.window.render_icon('sonata', Gtk.IconSize.DIALOG)
         self.window.set_icon(icon)
@@ -1418,6 +1418,8 @@ class Base:
             self.playing_song_change()
             self.update_statusbar()
             if not self.conn:
+                # FIXME convert to a library-specific command, so it can clear
+                # breadcrumbs too
                 self.librarydata.clear()
                 self.playlistsdata.clear()
                 self.streamsdata.clear()

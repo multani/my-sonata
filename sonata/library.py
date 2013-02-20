@@ -1028,9 +1028,9 @@ class Library:
         self.search_combo.handler_block(searchcombo_changed_handler)
         self.search_combo.set_active(self.config.last_search_num)
         self.search_combo.handler_unblock(searchcombo_changed_handler)
-        self.tree_data = Gtk.ListStore(GdkPixbuf.Pixbuf,
-                                         GObject.TYPE_PYOBJECT, str, str)
-        self.tree.set_model(self.tree_data)
+        tree_data = Gtk.ListStore(GdkPixbuf.Pixbuf, GObject.TYPE_PYOBJECT,
+                                  str, str)
+        self.tree.set_model(tree_data)
         self.tree.set_search_column(2)
         data_cell = Gtk.CellRendererText()
         data_cell.set_property("ellipsize", Pango.EllipsizeMode.END)
@@ -1048,9 +1048,6 @@ class Library:
         """Return the appropriate actions for the view popup menu."""
         return [view.get_action(self.on_view_chosen)
             for view in self.views.values()]
-
-    def get_model(self):
-        return self.tree_data
 
     def get_widgets(self):
         return self.vbox
@@ -1152,7 +1149,7 @@ class Library:
 
         self.config.wd = wd = root
         self.tree.freeze_child_notify()
-        self.tree_data.clear()
+        self.tree.get_model().clear()
         self.view.invalidate_row_cache()
 
         # Populate treeview with data:
@@ -1169,7 +1166,7 @@ class Library:
                 wd = self.config.wd
 
         for index, (_sort, path) in enumerate(bd):
-            self.tree_data.append(path)
+            self.tree.get_model().append(path)
             data = path[1]
             cache_key = SongRecord(artist=data.artist, album=data.album,
                                    path=data.path)
@@ -1194,8 +1191,9 @@ class Library:
         self.update_breadcrumbs()
 
     def set_pb_for_row(self, row, pixbuf):
-        i = self.tree_data.get_iter((row,))
-        self.tree_data.set_value(i, 0, pixbuf)
+        tree_data = self.tree.get_model()
+        i = tree_data.get_iter((row,))
+        tree_data.set_value(i, 0, pixbuf)
 
     def pixbuf_for_album_crumb(self, data=None, force=False):
         """Set the artwork for a breadcrumb representing an album."""
@@ -1287,7 +1285,7 @@ class Library:
         self.selection.unselect_all()
         # Now attempt to retain the selection from before the update:
         for value in prev_selection:
-            for row in self.tree_data:
+            for row in self.tree.get_model():
                 if value == row[1]:
                     self.selection.select_path(row.path)
                     break
@@ -1349,9 +1347,10 @@ class Library:
             return False
         treepath, _col, _x2, _y2 = pathinfo
 
-        i = self.tree_data.get_iter(treepath.get_indices()[0])
-        path = misc.escape_html(self.tree_data.get_value(i, 1).path)
-        song = self.tree_data.get_value(i, 2)
+        tree_data = self.tree.get_model()
+        i = tree_data.get_iter(treepath.get_indices()[0])
+        path = misc.escape_html(tree_data.get_value(i, 1).path)
+        song = tree_data.get_value(i, 2)
         new_tooltip = "<b>%s:</b> %s\n<b>%s:</b> %s" \
                 % (_("Song"), song, _("Path"), path)
 
@@ -1380,9 +1379,10 @@ class Library:
                 path = selected[0]
             else:
                 return
-        row_iter = self.tree_data.get_iter(path)
-        value = self.tree_data.get_value(row_iter, 1)
-        row_type = self.tree_data.get_value(row_iter, 3)
+        tree_data = self.tree.get_model()
+        row_iter = tree_data.get_iter(path)
+        value = tree_data.get_value(row_iter, 1)
+        row_type = tree_data.get_value(row_iter, 3)
         if row_type == self.view.TYPE_SONG:
             # Song found, add item
             self.on_add_item(self.tree)
@@ -1515,9 +1515,10 @@ class Library:
         bd = [self.view.song_row(song) for song in data if 'file' in song]
         bd.sort(key=lambda key: locale.strxfrm(key[2]))
         self.tree.freeze_child_notify()
-        self.tree_data.clear()
+        tree_data = self.tree.get_model()
+        tree_data.clear()
         for row in bd:
-            self.tree_data.append(row)
+            tree_data.append(row)
         self.tree.thaw_child_notify()
         if len(bd) == 0:
             GLib.idle_add(ui.set_entry_invalid, self.search_text)
