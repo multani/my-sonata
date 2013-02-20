@@ -988,8 +988,7 @@ class Library:
         tab_label = self.builder.get_object('library_tab_label')
         tab_label.set_text(TAB_LIBRARY)
 
-        self.tab = add_tab(self.get_widgets(), tab_label_widget, TAB_LIBRARY,
-                           self.tree)
+        add_tab(self.get_widgets(), tab_label_widget, TAB_LIBRARY, self.tree)
 
         self.search = LibrarySearch(self.mpd)
         self.search_thread = None
