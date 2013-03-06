@@ -119,17 +119,17 @@ replace_map = dict((code.code, code) for code in formatcodes)
 replace_expr = r"%%[%s]" % "".join(k for k in replace_map.keys())
 
 
-def _return_substrings(format):
-    """Split format along the { and } characters.
+def split_on_braces(format):
+    """Split format along the { and } characters."""
 
-    For example: %A{-%T} {%L} -> ['%A', '{-%T} ', '{%L}']"""
     substrings = []
     end = format
     while len(end) > 0:
         begin, sep1, end = end.partition('{')
         substrings.append(begin)
         if len(end) == 0:
-            substrings.append(sep1)
+            if sep1:
+                substrings.append(sep1)
             break
         begin, sep2, end = end.partition('}')
         substrings.append(sep1 + begin + sep2)
@@ -174,7 +174,7 @@ def _format_substrings(text, item, wintitle, songpos):
 
 
 def parse(format, item, use_escape_html, wintitle=False, songpos=None):
-    substrings = _return_substrings(format)
+    substrings = split_on_braces(format)
     text = "".join(_format_substrings(sub, item, wintitle, songpos)
             for sub in substrings)
     return misc.escape_html(text) if use_escape_html else text

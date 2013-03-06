@@ -16,6 +16,8 @@ except:
 
 from sonata import misc, song, library
 from sonata.mpdhelper import MPDSong
+from sonata.formatting import parse, split_on_braces
+
 
 DOCTEST_FLAGS = (
     doctest.ELLIPSIS |
@@ -109,6 +111,22 @@ class TestMPDSong(unittest.TestCase):
         song = MPDSong({'genre': ['a', 'b'], 'foo': ['c', 'd']})
         self.assertEqual('a', song.genre)
         self.assertEqual('c', song.foo)
+
+
+class TestFormatting(unittest.TestCase):
+
+    def test_parse_substrings(self):
+        x = split_on_braces('%N')
+        self.assertEqual(['%N'], x)
+
+        x = split_on_braces('%N - %Y')
+        self.assertEqual(['%N - %Y'], x)
+
+        x = split_on_braces('%A{-%T} {%L}')
+        self.assertEqual(['%A', '{-%T}', ' ', '{%L}'], x)
+
+        x = split_on_braces('%A{')
+        self.assertEqual(['%A', '{'], x) # XXX Is this right?
 
 
 def additional_tests():
