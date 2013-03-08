@@ -114,6 +114,28 @@ class TestMPDSong(unittest.TestCase):
 
 
 class TestFormatting(unittest.TestCase):
+    def setUp(self):
+        self.track = {
+            'artist': 'Foo Artist',
+            'album': 'Foo Album',
+        }
+
+    def test_1(self):
+        x = parse('%A', self.track, False)
+        self.assertEqual('Foo Artist', x)
+
+    def test_empty_brackets(self):
+        x = parse('{%SOMETHING}', self.track, False)
+        self.assertEqual('', x)
+
+    def test_several_formats(self):
+        x = parse('%A %B', self.track, False)
+        self.assertEqual('Foo Artist Foo Album', x)
+
+    def test_format_unset_field(self):
+        del self.track['artist']
+        x = parse('%A', self.track, False)
+        self.assertEqual('Unknown', x)
 
     def test_parse_substrings(self):
         x = split_on_braces('%N')
@@ -127,6 +149,9 @@ class TestFormatting(unittest.TestCase):
 
         x = split_on_braces('%A{')
         self.assertEqual(['%A', '{'], x) # XXX Is this right?
+
+
+
 
 
 def additional_tests():

@@ -213,6 +213,11 @@ class Current:
 
             self.store.append([track] + items + weight)
 
+    #def current_update(self, *args, **kwargs):
+        #import profile
+        #profile.runctx('self._current_update(*args, **kwargs)', globals(),
+                       #locals(), "/home/jon/projects/sonata/sonata/prof.prof")
+
     @try_keep_position
     def current_update(self, prevstatus_playlist, new_playlist_length):
         if not self.connected():
@@ -232,12 +237,21 @@ class Current:
 
             newlen = int(new_playlist_length)
             currlen = len(self.store)
+            formatting_strings = [formatting.split_on_braces(f)
+                                  for f in self.columnformat]
 
             for track in changed_songs:
                 pos = track.pos
 
                 items = [formatting.parse(part, track, True)
-                         for part in self.columnformat]
+                         for part in formatting_strings]
+
+                
+                items = []
+                for part in formatting_strings:
+                    res = formatting.parse(part, track, True)
+                    items.append(res)
+                    print("loop1", part, res)
 
                 if pos < currlen:
                     # Update attributes for item:

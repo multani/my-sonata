@@ -99,24 +99,24 @@ class ElapsedFormatCode(FormatCode):
             elapsed_time = misc.convert_time(int(elapsed_time))
         return elapsed_time
 
-formatcodes = [FormatCode('A', _('Artist name'), _("Artist"), 'artist'),
-           FormatCode('B', _('Album name'), _("Album"), 'album'),
-           TitleFormatCode('T', _('Track name'), _("Track"), 'title'),
-           NumFormatCode('N', _('Track number'), _("#"), 'track', '00', 2),
-           NumFormatCode('D', _('Disc number'), _("#"), 'disc', '0', 0),
-           FormatCode('Y', _('Year'), _("Year"), 'date', '?'),
-           FormatCode('G', _('Genre'), _("Genre"), 'genre'),
-           PathFormatCode('P', _('File path'), _("Path"), 'file',
-                'dirname'),
-           PathFormatCode('F', _('File name'), _("File"), 'file',
-                'basename'),
-           FormatCode('S', _('Stream name'), _("Stream"), 'name'),
-           LenFormatCode('L', _('Song length'), _("Len"), 'time', '?'),
-           ElapsedFormatCode('E', _('Elapsed time (title only)'), None,
-                 'songpos', '?')]
+formatcodes = [
+    FormatCode('A', _('Artist name'), _("Artist"), 'artist'),
+    FormatCode('B', _('Album name'), _("Album"), 'album'),
+    TitleFormatCode('T', _('Track name'), _("Track"), 'title'),
+    NumFormatCode('N', _('Track number'), _("#"), 'track', '00', 2),
+    NumFormatCode('D', _('Disc number'), _("#"), 'disc', '0', 0),
+    FormatCode('Y', _('Year'), _("Year"), 'date', '?'),
+    FormatCode('G', _('Genre'), _("Genre"), 'genre'),
+    PathFormatCode('P', _('File path'), _("Path"), 'file', 'dirname'),
+    PathFormatCode('F', _('File name'), _("File"), 'file', 'basename'),
+    FormatCode('S', _('Stream name'), _("Stream"), 'name'),
+    LenFormatCode('L', _('Song length'), _("Len"), 'time', '?'),
+    ElapsedFormatCode('E', _('Elapsed time (title only)'), None, 'songpos', '?')
+]
 
 replace_map = dict((code.code, code) for code in formatcodes)
 replace_expr = r"%%[%s]" % "".join(k for k in replace_map.keys())
+replace_re = re.compile(replace_expr)
 
 
 def split_on_braces(format):
@@ -142,7 +142,7 @@ def parse_colnames(format):
         format_code = replace_map.get(m.group(0)[1:])
         return format_code.column
 
-    cols = [re.sub(replace_expr, replace_format, s).
+    cols = [replace_re.sub(replace_format, s).
         replace("{", "").
         replace("}", "").
         # If the user wants the format of, e.g., "#%N", we'll
@@ -166,15 +166,14 @@ def _format_substrings(text, item, wintitle, songpos):
         return format_code.format(item, wintitle, songpos)
 
     try:
-        text = re.sub(replace_expr, formatter, text)
+        text = replace_re.sub(formatter, text)
     except EmptyBrackets:
         return ""
 
     return text[1:-1] if has_brackets else text
 
 
-def parse(format, item, use_escape_html, wintitle=False, songpos=None):
-    substrings = split_on_braces(format)
+def parse(formats, item, use_escape_html, wintitle=False, songpos=None):
     text = "".join(_format_substrings(sub, item, wintitle, songpos)
-            for sub in substrings)
+                   for sub in formats)
     return misc.escape_html(text) if use_escape_html else text
