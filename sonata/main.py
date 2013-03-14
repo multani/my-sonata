@@ -62,8 +62,6 @@ class Base:
         self.logger = logging.getLogger(__name__)
 
         # The following attributes were used but not defined here before:
-        self.album_current_artist = None
-
         self.allow_art_search = None
         self.choose_dialog = None
         self.image_local_dialog = None
@@ -136,8 +134,6 @@ class Base:
 
         self.sonata_loaded = False
         self.call_gc_collect = False
-
-        self.album_reset_artist()
 
         show_prefs = False
         self.merge_id = None
@@ -1406,8 +1402,6 @@ class Base:
         if self.prevstatus is None \
            or self.prevstatus['state'] != self.status['state']:
 
-            self.album_get_artist()
-
             # Update progressbar if the state changes too
             self.update_progressbar()
             self.update_cursong()
@@ -1486,10 +1480,6 @@ class Base:
     def mpd_updated_db(self):
         self.library.view_caches_reset()
         self.update_statusbar(False)
-        # We need to make sure that we update the artist in case tags
-        # have changed:
-        self.album_reset_artist()
-        self.album_get_artist()
         # Now update the library and playlist tabs
         if self.library.search_visible():
             self.library.on_library_search_combo_change()
@@ -1500,15 +1490,6 @@ class Base:
         self.info_update(True)
         return False
 
-    def album_get_artist(self):
-        if self.songinfo and 'album' in self.songinfo:
-            self.album_return_artist_name()
-        elif self.songinfo and 'artist' in self.songinfo:
-            self.album_current_artist = [self.songinfo,
-                                         self.songinfo.artist]
-        else:
-            self.album_current_artist = [self.songinfo, ""]
-
     def handle_change_song(self):
         # Called when one of the following items are changed for the current
         # mpd song in the playlist:
@@ -1517,8 +1498,6 @@ class Base:
         # Note that the song does not have to be playing; it can reflect the
         # next song that will be played.
         self.current.on_song_change(self.status)
-
-        self.album_get_artist()
 
         self.update_cursong()
         self.update_wintitle()
@@ -2136,19 +2115,6 @@ class Base:
         else:
             return None, None
 
-    def album_return_artist_name(self):
-        # Determine if album_name is a various artists album.
-        if self.album_current_artist[0] == self.songinfo:
-            return
-        artist, _tracks = self.album_return_artist_and_tracks()
-        if artist is not None:
-            self.album_current_artist = [self.songinfo, artist]
-        else:
-            self.album_current_artist = [self.songinfo, ""]
-
-    def album_reset_artist(self):
-        self.album_current_artist = [None, ""]
-
     def on_image_activate_after(self):
         self.window.handler_unblock(self.mainwinhandler)
 
@@ -2205,7 +2171,7 @@ class Base:
             self._image_local_init()
         stream = self.songinfo.name
         album = (self.songinfo.album or "").replace("/", "")
-        artist = self.album_current_artist[1].replace("/", "")
+        artist = (self.songinfo.album or "").replace("/", "")
         songdir = os.path.dirname(self.songinfo.file)
         currdir = os.path.join(self.config.musicdir[self.config.profile_num],
                                songdir)
@@ -2252,7 +2218,7 @@ class Base:
         self.remote_dest_filename = artwork.artwork_path(self.songinfo,
                                                          self.config)
         album = self.songinfo.album or ''
-        artist = self.album_current_artist[1]
+        artist = self.songinfo.album or ''
         self.image_widget.connect('item-activated', self.image_remote_replace_cover,
                             artist.replace("/", ""), album.replace("/", ""),
                             stream)
