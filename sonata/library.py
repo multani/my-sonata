@@ -342,6 +342,7 @@ class Library:
 
         self.config.wd = root
         self.library.freeze_child_notify()
+        self.library.set_model(None)
         self.librarydata.clear()
 
         # Populate treeview with data:
@@ -391,6 +392,7 @@ class Library:
         for _sort, path in bd:
             self.librarydata.append(path)
 
+        self.library.set_model(self.librarydata)
         self.library.thaw_child_notify()
 
         # Scroll back to set view for current dir:
