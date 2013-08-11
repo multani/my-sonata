@@ -1,0 +1,8 @@
+sorted(self.views.items())
+
+@@ -188,7 +191,7 @@ class Library:
+     def get_libraryactions(self):
+         return [(name + 'view', icon, label,
+              None, None, self.on_libraryview_chosen)
+-            for _view, name, icon, label in self.VIEWS]
++            for name, icon, label in self.VIEWS.values()]
