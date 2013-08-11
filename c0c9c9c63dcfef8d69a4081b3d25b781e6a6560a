@@ -1,1 +1,12 @@
 build a dict with the arguments and fill it, instead of "guessing" what the default values of the arguments are
+
+Like:
+
+kwargs = {}
+if self.config.lib_view == consts.VIEW_ARTIST:
+    if wd.album is not None:
+        kwargs['artist'] = wd.artist
+...
+return SongRecord(**kwargs)
+
+Also, simplify conditions (only one if in the previous example)
