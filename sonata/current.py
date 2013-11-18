@@ -103,14 +103,18 @@ class Current:
         """Decorator to keep the position of the view while updating it"""
 
         def do_try_keep_position(self, *args, **kwargs):
-            realized = self.view.get_realized()
-            if realized:
-                position = self.view.get_visible_rect()
+            path = self.view.get_path_at_pos(0, 0)
+            print(path)
+            cursor = self.view.get_cursor()[0]
 
             result = func(self, *args, **kwargs)
 
-            if realized:
-                self.view.scroll_to_point(-1, position.y)
+            if cursor:
+                self.view.set_cursor(cursor)
+
+            if path:
+                self.view.scroll_to_cell(path[0], None, 0, 0)
+
 
             return result
         return do_try_keep_position
