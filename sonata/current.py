@@ -23,11 +23,11 @@ class Current:
         self.update_statusbar = update_statusbar
         self.iterate_now = iterate_now
 
-        self.store = None
+        self.store = Gtk.ListStore(MPDSong, int)
+
         self.filterbox_visible = False
         self.update_skip = False
         self.columnformat = None
-        self.columns = None
 
         self.refilter_handler_id = None
         # TreeViewColumn, order
@@ -81,6 +81,10 @@ class Current:
 
         self.view.connect('drag-data-get', self.dnd_get_data_for_file_managers)
 
+    @property
+    def columns(self):
+        return self.view.get_columns()
+
     def get_widgets(self):
         return self.vbox
 
@@ -129,9 +133,7 @@ class Current:
         # Initialize current playlist data and widget
         self.resizing_columns = False
         self.columnformat = self.config.currentformat.split("|")
-        current_columns = [MPDSong] + [str] * len(self.columnformat) + [int]
-        previous_tracks = (item[0] for item in (self.store or []))
-        self.store = Gtk.ListStore(*(current_columns))
+
         cellrenderer = Gtk.CellRendererText()
         cellrenderer.set_property("ellipsize", Pango.EllipsizeMode.END)
         cellrenderer.set_property("weight-set", True)
@@ -145,13 +147,24 @@ class Current:
         colnames = formatting.parse_colnames(self.config.currentformat)
         for column in self.view.get_columns():
             self.view.remove_column(column)
-        self.columns = [Gtk.TreeViewColumn(name, cellrenderer, markup=(i + 1))
-                for i, name in enumerate(colnames)]
-        for tree in self.columns:
-            tree.add_attribute(cellrenderer, "weight", len(current_columns) - 1)
 
-        for column, width in zip(self.columns, self.config.columnwidths):
+        for i, (name, format, width) in enumerate(zip(
+            colnames, self.columnformat, self.config.columnwidths)):
+
+            column = Gtk.TreeViewColumn(name, cellrenderer)
+            # XXX
+            column.add_attribute(cellrenderer, "weight", 1)
             column.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
+
+            def cell_data_func(column, cell, model, iter, data):
+                format = data['format']
+                song = model[iter][0]
+                text = formatting.parse(format, song, use_escape_html=True)
+                cell.set_property('text', text)
+
+            column.set_cell_data_func(cellrenderer, cell_data_func,
+                                      func_data={'format': format})
+
             # If just one column, we want it to expand with the tree, so
             # don't set a fixed_width; if multiple columns, size accordingly:
             if num_columns > 1:
@@ -167,7 +180,6 @@ class Current:
         self.view.set_headers_visible(num_columns > 1 and \
                                          self.config.show_header)
         self.view.set_headers_clickable(not self.filterbox_visible)
-        self.update_format(previous_tracks)
         self.view.set_model(self.store)
 
     def dnd_get_data_for_file_managers(self, _treeview, context, selection,
@@ -201,18 +213,6 @@ class Current:
                 filenames.append(item)
         return filenames
 
-    def update_format(self, tracks):
-        for i, track in enumerate(tracks):
-            items = [formatting.parse(part, track, True)
-                     for part in self.columnformat]
-
-            if self.songinfo().pos == i:
-                weight = [Pango.Weight.BOLD]
-            else:
-                weight = [Pango.Weight.NORMAL]
-
-            self.store.append([track] + items + weight)
-
     @try_keep_position
     def current_update(self, prevstatus_playlist, new_playlist_length):
         if self.connected():
@@ -234,21 +234,13 @@ class Current:
                 for track in changed_songs:
                     pos = track.pos
 
-                    items = [formatting.parse(part, track, True)
-                             for part in self.columnformat]
-
                     if pos < currlen:
                         # Update attributes for item:
                         i = self.store.get_iter((pos, ))
-                        if track.id != self.store.get_value(i, 0).id:
-                            self.store.set_value(i, 0, track)
-                        for index in range(len(items)):
-                            if items[index] != self.store.get_value(i, index+1):
-                                self.store.set_value(i, index + 1, items[index])
+                        self.store.set_value(i, 0, track)
                     else:
                         # Add new item:
-                        self.store.append(
-                            [track] + items + [Pango.Weight.NORMAL])
+                        self.store.append([track, Pango.Weight.NORMAL])
 
                 if newlen == 0:
                     self.store.clear()
