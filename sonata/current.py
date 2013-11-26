@@ -23,7 +23,7 @@ class Current:
         self.update_statusbar = update_statusbar
         self.iterate_now = iterate_now
 
-        self.store = Gtk.ListStore(MPDSong, int)
+        self.store = Gtk.ListStore(MPDSong)
 
         self.filterbox_visible = False
         self.update_skip = False
@@ -34,7 +34,6 @@ class Current:
         self.column_sorted = (None, Gtk.SortType.DESCENDING)
         self.total_time = 0
         self.resizing_columns = None
-        self.prev_boldrow = -1
         self.playlist_pos_before_filter = None
         self.sel_rows = None
 
@@ -95,13 +94,11 @@ class Current:
         self.store.clear()
 
     def on_song_change(self, status):
-        self.unbold_boldrow(self.prev_boldrow)
-
-        if status and 'song' in status:
-            row = int(status['song'])
-            self.boldrow(row)
-            self.center_song_in_list()
-            self.prev_boldrow = row
+        self.center_song_in_list()
+        # We need to redraw the view, because the model didn't actually change,
+        # but since the "boldness" of a row must be changed, we need to signal
+        # the view to do something.
+        self.view.queue_draw()
 
     def try_keep_position(func):
         """Decorator to keep the position of the view while updating it"""
@@ -152,8 +149,6 @@ class Current:
             colnames, self.columnformat, self.config.columnwidths)):
 
             column = Gtk.TreeViewColumn(name, cellrenderer)
-            # XXX
-            column.add_attribute(cellrenderer, "weight", 1)
             column.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
 
             def cell_data_func(column, cell, model, iter, data):
@@ -161,6 +156,14 @@ class Current:
                 song = model[iter][0]
                 text = formatting.parse(format, song, use_escape_html=True)
                 cell.set_property('text', text)
+
+                # We have to be sure to signal the view to redraw on song
+                # changes also, otherwise, this status will get updated only if
+                # the view is invalidated.
+                if song == self.songinfo():
+                    cell.set_property('weight', Pango.Weight.BOLD)
+                else:
+                    cell.set_property('weight', Pango.Weight.NORMAL)
 
             column.set_cell_data_func(cellrenderer, cell_data_func,
                                       func_data={'format': format})
@@ -217,7 +220,6 @@ class Current:
     def current_update(self, prevstatus_playlist, new_playlist_length):
         if self.connected():
             self.view.freeze_child_notify()
-            self.unbold_boldrow(self.prev_boldrow)
 
             if not self.update_skip:
                 save_model = self.view.get_model()
@@ -240,7 +242,7 @@ class Current:
                         self.store.set_value(i, 0, track)
                     else:
                         # Add new item:
-                        self.store.append([track, Pango.Weight.NORMAL])
+                        self.store.append([track])
 
                 if newlen == 0:
                     self.store.clear()
@@ -255,12 +257,6 @@ class Current:
 
             # Update statusbar time:
             self.total_time = sum(item[0].time for item in self.store)
-
-            if 'pos' in self.songinfo():
-                currsong = self.songinfo().pos
-                self.boldrow(currsong)
-                self.prev_boldrow = currsong
-
             self.view.thaw_child_notify()
             self.header_update_column_indicators()
             self.update_statusbar()
@@ -681,22 +677,6 @@ class Current:
             treeview.grab_focus()
             treeview.emit("key-press-event", event)
             GLib.idle_add(self.filter_entry_grab_focus, widget)
-
-    def boldrow(self, row):
-        if row > -1:
-            try:
-                self.store[row][-1] = Pango.Weight.BOLD
-            except IndexError:
-                # The row might not exist anymore
-                pass
-
-    def unbold_boldrow(self, row):
-        if row > -1:
-            try:
-                self.store[row][-1] = Pango.Weight.NORMAL
-            except IndexError:
-                # The row might not exist anymore
-                pass
 
     def on_remove(self):
         model, selected = self.selection.get_selected_rows()
