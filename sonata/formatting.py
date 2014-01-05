@@ -9,6 +9,15 @@ newtitle = formatting.parse(self.config.titleformat, self.songinfo,
                             False, True)
 ...
 formatcodes = formatting.formatcodes
+
+
+TODO:
+    * FormatCode doesn't use %code
+    * Remove wintitle
+    * Use super() instead of FormatCode...(self)
+    * Simplify signature of .format() (remove songpos too?)
+    * TitleFormatCode .default changes every .format() call
+    * _return_substrings creates empty items
 """
 
 import re
@@ -73,6 +82,7 @@ class TitleFormatCode(FormatCode):
     def format(self, item, wintitle, songpos):
         path = item['file']
         full_path = re.match(r"^(http://|ftp://)", path)
+        # TODO: do we really have to mutate self.default here?
         self.default = path if full_path else os.path.basename(path)
         self.default = misc.escape_html(self.default)
         return FormatCode.format(self, item, wintitle, songpos)
@@ -122,7 +132,14 @@ replace_expr = r"%%[%s]" % "".join(k for k in replace_map.keys())
 def _return_substrings(format):
     """Split format along the { and } characters.
 
-    For example: %A{-%T} {%L} -> ['%A', '{-%T} ', '{%L}']"""
+    For example:
+
+    >>> from sonata.formatting import _return_substrings
+    >>> _return_substrings("%A{-%T} {%L}")
+    ['%A', '{-%T}', ' ', '{%L}']
+
+    """
+
     substrings = []
     end = format
     while len(end) > 0:
