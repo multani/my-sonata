@@ -242,7 +242,8 @@ class Current:
                         self.store.set_value(i, 0, track)
                     else:
                         # Add new item:
-                        self.store.append([track])
+                        # .insert_with_valuesv is much faster than .append
+                        self.store.insert_with_valuesv(-1, [0], [track])
 
                 if newlen == 0:
                     self.store.clear()
