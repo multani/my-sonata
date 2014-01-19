@@ -13,7 +13,6 @@ formatcodes = formatting.formatcodes
 
 TODO:
     * FormatCode doesn't use %code
-    * Use super() instead of FormatCode...(self)
     * TitleFormatCode .default changes every .format() call
     * _return_substrings creates empty items
 """
@@ -54,7 +53,8 @@ class NumFormatCode(FormatCode):
         self.padding = padding
 
     def format(self, item):
-        return str(item.get(self.key, self.default)).zfill(self.padding)
+        value = super().format(item)
+        return value.zfill(self.padding)
 
 
 class PathFormatCode(FormatCode):
@@ -69,7 +69,7 @@ class PathFormatCode(FormatCode):
         self.func = getattr(os.path, path_func)
 
     def format(self, item):
-        return self.func(FormatCode.format(self, item))
+        return self.func(super().format(item))
 
 
 class TitleFormatCode(FormatCode):
@@ -81,14 +81,14 @@ class TitleFormatCode(FormatCode):
         # TODO: do we really have to mutate self.default here?
         self.default = path if full_path else os.path.basename(path)
         self.default = misc.escape_html(self.default)
-        return FormatCode.format(self, item)
+        return super().format(item)
 
 
 class LenFormatCode(FormatCode):
     """Implements format code behavior for song length."""
 
     def format(self, item):
-        time = FormatCode.format(self, item)
+        time = super().format(item)
         if time.isdigit():
             time = misc.convert_time(int(time))
         return time
