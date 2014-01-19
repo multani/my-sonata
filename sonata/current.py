@@ -27,13 +27,11 @@ class Current:
 
         self.filterbox_visible = False
         self.update_skip = False
-        self.columnformat = None
 
         self.refilter_handler_id = None
         # TreeViewColumn, order
         self.column_sorted = (None, Gtk.SortType.DESCENDING)
         self.total_time = 0
-        self.resizing_columns = None
         self.playlist_pos_before_filter = None
         self.sel_rows = None
 
@@ -128,33 +126,31 @@ class Current:
     @try_keep_position
     def initialize_columns(self):
         # Initialize current playlist data and widget
-        self.resizing_columns = False
-        self.columnformat = self.config.currentformat.split("|")
+        columns_def = formatting.ColumnFormatting(self.config.currentformat)
 
         cellrenderer = Gtk.CellRendererText()
         cellrenderer.set_property("ellipsize", Pango.EllipsizeMode.END)
         cellrenderer.set_property("weight-set", True)
 
-        num_columns = len(self.columnformat)
+        num_columns = len(columns_def)
         if num_columns != len(self.config.columnwidths):
             # Number of columns changed, set columns equally spaced:
             self.config.columnwidths = [self.view.get_allocation().width / \
                                         num_columns] * num_columns
 
-        colnames = formatting.parse_colnames(self.config.currentformat)
         for column in self.view.get_columns():
             self.view.remove_column(column)
 
-        for i, (name, format, width) in enumerate(zip(
-            colnames, self.columnformat, self.config.columnwidths)):
+        for (name, formatter), width in zip(columns_def,
+                                            self.config.columnwidths):
 
             column = Gtk.TreeViewColumn(name, cellrenderer)
             column.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
 
             def cell_data_func(column, cell, model, iter, data):
-                format = data['format']
+                formatter = data['formatter']
                 song = model[iter][0]
-                text = formatting.parse(format, song, use_escape_html=True)
+                text = formatter.format(song)
                 cell.set_property('text', text)
 
                 # We have to be sure to signal the view to redraw on song
@@ -166,7 +162,7 @@ class Current:
                     cell.set_property('weight', Pango.Weight.NORMAL)
 
             column.set_cell_data_func(cellrenderer, cell_data_func,
-                                      func_data={'format': format})
+                                      func_data={'formatter': formatter})
 
             # If just one column, we want it to expand with the tree, so
             # don't set a fixed_width; if multiple columns, size accordingly:
@@ -621,9 +617,9 @@ class Current:
         self.view.set_headers_clickable(not self.filterbox_visible)
 
     def model_filter_func(self, model, iter, regex):
-        row = model.get(iter, 1, *range(len(self.columnformat)- 1)[1:])
-        for cell in row:
-            if regex.match(cell.lower()):
+        row = model.get_value(iter, 0)
+        for key, value in row:
+            if regex.match(str(value).lower()):
                 return True
         return False
 

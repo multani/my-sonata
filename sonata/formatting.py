@@ -19,6 +19,7 @@ TODO:
 
 import re
 import os
+import weakref
 
 from sonata import misc
 
@@ -39,7 +40,15 @@ class FormatCode:
 
     def format(self, item):
         """Returns the value used in place of the format code"""
-        return str(item.get(self.key, self.default))
+        try:
+            value = item[self.key]
+        except KeyError:
+            value = None
+
+        if value is None:
+            value = self.default
+
+        return str(value)
 
 
 class NumFormatCode(FormatCode):
@@ -123,7 +132,7 @@ formatcodes = [
 ]
 
 replace_map = dict((code.code, code) for code in formatcodes)
-replace_expr = r"%%[%s]" % "".join(k for k in replace_map.keys())
+replace_expr = re.compile(r"%%[%s]" % "".join(k for k in replace_map.keys()))
 
 
 def _return_substrings(format):
@@ -150,20 +159,51 @@ def _return_substrings(format):
     return substrings
 
 
-def parse_colnames(format):
+class ColumnFormatting:
+    def __init__(self, multi_columns_format):
+        self._format = multi_columns_format
+        self.sub_formatters = [CachingFormatter(f, True)
+                               for f in multi_columns_format.split('|')]
+        self.columns_names = self._parse_column_names()
 
-    def replace_format(m):
-        format_code = replace_map.get(m.group(0)[1:])
-        return format_code.column
+    def __len__(self):
+        return len(self.columns_names)
 
-    cols = [re.sub(replace_expr, replace_format, s).
-            replace("{", "").
-            replace("}", "").
-            # If the user wants the format of, e.g., "#%N", we'll
-            # ensure the # doesn't show up twice in a row.
-            replace("##", "#")
-            for s in format.split('|')]
-    return cols
+    def __iter__(self):
+        return zip(self.columns_names, self.sub_formatters)
+
+    def _parse_column_names(self):
+        def replace_format(m):
+            format_code = replace_map.get(m.group(0)[1:])
+            return format_code.column
+
+        cols = [replace_expr.sub(replace_format, s).
+                replace("{", "").
+                replace("}", "").
+                # If the user wants the format of, e.g., "#%N", we'll
+                # ensure the # doesn't show up twice in a row.
+                replace("##", "#")
+                for s in self._format.split('|')]
+        return cols
+
+
+class CachingFormatter:
+    def __init__(self, format, escape=False):
+        self._format = _return_substrings(format)
+        self._escape = escape
+        self._cache = weakref.WeakKeyDictionary()
+        self._format_func = _format_one
+
+    def format(self, item):
+        cache_key = item
+        try:
+            return self._cache[cache_key]
+        except KeyError:
+            pass
+
+        result = self._format_func(self._format, item, self._escape)
+        self._cache[cache_key] = result
+        return result
 
 
 class EmptyBrackets(Exception):
@@ -180,7 +220,7 @@ def _format_substrings(text, item):
         return format_code.format(item)
 
     try:
-        text = re.sub(replace_expr, formatter, text)
+        text = replace_expr.sub(formatter, text)
     except EmptyBrackets:
         return ""
 
@@ -189,6 +229,10 @@ def _format_substrings(text, item):
 
 def parse(format, item, use_escape_html):
     substrings = _return_substrings(format)
+    return _format_one(substrings, item, use_escape_html)
+
+
+def _format_one(substrings, item, use_escape_html):
     text = "".join(_format_substrings(sub, item)
                    for sub in substrings)
     return misc.escape_html(text) if use_escape_html else text

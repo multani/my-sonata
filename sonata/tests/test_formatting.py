@@ -2,6 +2,7 @@ import doctest
 import unittest
 
 from sonata import formatting
+from sonata.mpdhelper import MPDSong
 
 
 DOCTEST_FLAGS = (
@@ -107,33 +108,41 @@ class TestParsingSubString(unittest.TestCase):
 
 
 class TestParseColumnName(unittest.TestCase):
-    func = staticmethod(formatting.parse_colnames)
-
     def test_empty(self):
-        self.assertEqual([""], self.func(""))
+        f = formatting.ColumnFormatting("")
+        self.assertEqual([""], f.columns_names)
 
     def test_no_column(self):
-        self.assertEqual(["foo"], self.func("foo"))
+        f = formatting.ColumnFormatting("foo")
+        self.assertEqual(["foo"], f.columns_names)
 
     def test_one_column(self):
-        self.assertEqual(["foo", "bar"], self.func("foo|bar"))
+        f = formatting.ColumnFormatting("foo|bar")
+        self.assertEqual(["foo", "bar"], f.columns_names)
 
     def test_several_columns(self):
-        self.assertEqual(["foo", "bar", " baz"], self.func("foo|bar| baz"))
+        f = formatting.ColumnFormatting("foo|bar| baz")
+        self.assertEqual(["foo", "bar", " baz"], f.columns_names)
 
     def test_one_code(self):
-        self.assertEqual(["Artist"], self.func("%A"))
+        f = formatting.ColumnFormatting("%A")
+        self.assertEqual(["Artist"], f.columns_names)
 
     def test_multiple_codes(self):
+        f = formatting.ColumnFormatting("%A %B %3|%T")
         self.assertEqual(["Artist Album %3", "Track"],
-                         self.func("%A %B %3|%T"))
+                         f.columns_names)
 
     def test_with_substrings(self):
-        self.assertEqual(["Artist -Track", "Len"], self.func("%A {-%T}|{%L}"))
+        f = formatting.ColumnFormatting("%A {-%T}|{%L}")
+        self.assertEqual(["Artist -Track", "Len"], f.columns_names)
 
     def test_with_dash(self):
-        self.assertEqual(["#"], self.func("%N"))
-        self.assertEqual(["#"], self.func("#%N"))
+        f = formatting.ColumnFormatting("%N")
+        self.assertEqual(["#"], f.columns_names)
+
+        f = formatting.ColumnFormatting("#%N")
+        self.assertEqual(["#"], f.columns_names)
 
 
 class TestFormatSubstrings(unittest.TestCase):
@@ -196,6 +205,103 @@ class TestParseAndFormat(unittest.TestCase):
         self.assertEqual('Art: Foo - Alb: Bar',
                          self.func("Art: %A - Alb: %B",
                                    {'artist': 'Foo', 'album': 'Bar'}, False))
+
+
+class TestFormatMPDSong(unittest.TestCase):
+    """Format a real MPD Song object"""
+
+    func = staticmethod(formatting.parse)
+
+    def test_format_simple_song(self):
+        song = MPDSong({'artist': 'artist',
+                        'album': 'album',
+                        'track': '42'})
+
+        self.assertEqual('Art: artist - Alb: album - Track: 42',
+                         self.func("Art: %A - Alb: %B - Track: %N",
+                                   song, False))
+
+
+class TestFormatColumns(unittest.TestCase):
+    def test_columns_names(self):
+        f = formatting.ColumnFormatting('%A|%B|%N')
+        self.assertEqual(['Artist', 'Album', '#'], f.columns_names)
+
+        f = formatting.ColumnFormatting('%Y')
+        self.assertEqual(['Year'], f.columns_names)
+
+    def test_len_formatter(self):
+        f = formatting.ColumnFormatting('%A|%B|%N')
+        self.assertEqual(3, len(f))
+
+        f = formatting.ColumnFormatting('%D')
+        self.assertEqual(1, len(f))
+
+    def test_empty_columns(self):
+        # Pathological case
+        f = formatting.ColumnFormatting('')
+        self.assertEqual(1, len(f))
+
+        f = formatting.ColumnFormatting('')
+        self.assertEqual([''], f.columns_names)
+
+
+class TestCachingFormatter(unittest.TestCase):
+    def make_song(self, extras={}):
+        values = {'artist': 'artist',
+                  'album': 'album',
+                  'file': 'foo/bar.ext',
+                  'track': '42'}
+        values.update(extras)
+        return MPDSong(values)
+
+    def test_simple(self):
+        song = self.make_song()
+
+        f = formatting.CachingFormatter('%A')
+        self.assertEqual('artist', f.format(song))
+
+        f = formatting.CachingFormatter('%A %B')
+        self.assertEqual('artist album', f.format(song))
+
+    def test_escape_html(self):
+        song = self.make_song({'artist': '<b>&h!'})
+
+        f = formatting.CachingFormatter('%A')
+        self.assertEqual('<b>&h!', f.format(song))
+
+        f = formatting.CachingFormatter('%A', True)
+        self.assertEqual('&lt;b&gt;&amp;h!', f.format(song))
+
+    def test_cache(self):
+        song = self.make_song()
+
+        class TestCachingFormatter(formatting.CachingFormatter):
+            # Catch formatting calls, to test the caching process
+            def __init__(self, *a, **k):
+                super().__init__(*a, **k)
+                self.called = 0
+
+                def format(*a, **k):
+                    self.called += 1
+                    return "foo"
+
+                self._format_func = format
+
+        f = TestCachingFormatter('%A')
+        self.assertEqual(0, len(f._cache))
+        self.assertEqual(0, f.called)
+
+        self.assertEqual('foo', f.format(song))
+        self.assertEqual(1, len(f._cache))
+        self.assertEqual(1, f.called)
+
+        self.assertEqual('foo', f.format(song))
+        # Already formatted and should be in the cache, no new call made
+        self.assertEqual(1, f.called)
+
+        del song
+        self.assertEqual(0, len(f._cache))
 
 
 def additional_tests():

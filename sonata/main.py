@@ -1777,8 +1777,7 @@ class Base:
         self.config.x, self.config.y = window.get_position()
 
     def on_notebook_resize(self, _widget, _event):
-        if not self.current.resizing_columns:
-            GLib.idle_add(self.header_save_column_widths)
+        GLib.idle_add(self.header_save_column_widths)
 
     def on_expand(self, _action):
         if not self.config.expanded:
@@ -2397,7 +2396,6 @@ class Base:
                                                       column.get_fixed_width())
                 else:
                     self.config.columnwidths[i] = colwidth
-        self.current.resizing_columns = False
 
     def on_tray_click(self, _widget, event):
         # Clicking on a system tray icon:
