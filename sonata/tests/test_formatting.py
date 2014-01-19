@@ -22,73 +22,69 @@ class TestFormatCode(unittest.TestCase):
     def test_default_format_code(self):
         f = formatting.FormatCode(None, None, None, "foo", "default")
 
-        self.assertEqual("bar", f.format(self.item, None, None))
-        self.assertEqual("default", f.format({}, None, None))
+        self.assertEqual("bar", f.format(self.item))
+        self.assertEqual("default", f.format({}))
 
     def test_number_format(self):
         f = formatting.NumFormatCode(None, None, None, "num", 42, 6)
 
-        self.assertEqual("000005", f.format(self.item, None, None))
-        self.assertEqual("000042", f.format({}, None, None))
+        self.assertEqual("000005", f.format(self.item))
+        self.assertEqual("000042", f.format({}))
 
     def test_path_format(self):
         f = formatting.PathFormatCode(None, None, None, "path", "dirname")
 
-        self.assertEqual("/plop/plip", f.format(self.item, None, None))
-        self.assertEqual("", f.format({}, None, None))
+        self.assertEqual("/plop/plip", f.format(self.item))
+        self.assertEqual("", f.format({}))
 
     def test_title_format_local_file(self):
         f = formatting.TitleFormatCode(None, None, None, "foo", "default")
 
         item = {"file": "/tmp/foo.mp3", "foo": "bar"}
-        self.assertEqual("bar", f.format(item, None, None))
+        self.assertEqual("bar", f.format(item))
 
         item = {"file": "/tmp/foo.mp3"}
-        self.assertEqual("foo.mp3", f.format(item, None, None))
+        self.assertEqual("foo.mp3", f.format(item))
 
         item = {"file": "foo.mp3"}
-        self.assertEqual("foo.mp3", f.format(item, None, None))
+        self.assertEqual("foo.mp3", f.format(item))
 
     def test_title_format_remote_file(self):
         f = formatting.TitleFormatCode(None, None, None, "foo", "default")
 
         item = {"file": "http://example.com/foo.mp3"}
-        self.assertEqual("http://example.com/foo.mp3", f.format(item, None, None))
+        self.assertEqual("http://example.com/foo.mp3", f.format(item))
 
         item = {"file": "ftp://example.com/foo.mp3"}
-        self.assertEqual("ftp://example.com/foo.mp3", f.format(item, None, None))
+        self.assertEqual("ftp://example.com/foo.mp3", f.format(item))
 
     def test_title_format_escape_html(self):
         f = formatting.TitleFormatCode(None, None, None, "foo", "default")
 
         item = {"file": "http://example.com/foo.mp3<div>plop</div>",
                 "foo": "bar<div>plop</div>"}
-        self.assertEqual("bar<div>plop</div>", f.format(item, None, None))
+        self.assertEqual("bar<div>plop</div>", f.format(item))
 
         item = {"file": "http://example.com/foo.mp3<div>plop</div>"}
         self.assertEqual("http://example.com/foo.mp3&lt;div&gt;plop&lt;/div&gt;",
-                         f.format(item, None, None))
+                         f.format(item))
 
     def test_length_format(self):
         f = formatting.LenFormatCode(None, None, None, "num", "default")
 
-        self.assertEqual("00:05", f.format(self.item, None, None))
-        self.assertEqual("16:18", f.format({'num': 978}, None, None))
-        self.assertEqual("default", f.format({}, None, None))
-
-    def test_elapsed_format_not_wintitle(self):
-        f = formatting.ElapsedFormatCode(None, None, None, None, "default")
-
-        self.assertEqual("%E", f.format(self.item, False, None))
+        self.assertEqual("00:05", f.format(self.item))
+        self.assertEqual("16:18", f.format({'num': 978}))
+        self.assertEqual("default", f.format({}))
 
     def test_elapsed_format(self):
         f = formatting.ElapsedFormatCode(None, None, None, None, "default")
 
-        self.assertEqual("03:02", f.format(self.item, True, "182:286"))
+        self.assertEqual("%E", f.format({}))
+        self.assertEqual("03:02", f.format({'status:time': '182:286'}))
 
         # This happens if MPD doesn't return the "time" line in response to the
         # "status" command
-        self.assertEqual("default", f.format(self.item, True, None))
+        self.assertEqual("default", f.format({'status:time': None}))
 
 
 class TestParsingSubString(unittest.TestCase):
@@ -144,30 +140,30 @@ class TestFormatSubstrings(unittest.TestCase):
     func = staticmethod(formatting._format_substrings)
 
     def test_empty(self):
-        self.assertEqual("", self.func("", {}, None, None))
+        self.assertEqual("", self.func("", {}))
 
     def test_simple(self):
         self.assertEqual('Art: Foo',
-                         self.func("Art: %A", {'artist': 'Foo'}, None, None))
+                         self.func("Art: %A", {'artist': 'Foo'}))
 
     def test_value_not_available(self):
         self.assertEqual('Art: Unknown',
-                         self.func("Art: %A", {}, None, None))
+                         self.func("Art: %A", {}))
 
     def test_with_brackets_filled(self):
         self.assertEqual('Art: Foo',
-                         self.func("{Art: %A}", {'artist': 'Foo'}, None, None))
+                         self.func("{Art: %A}", {'artist': 'Foo'}))
 
     def test_with_brackets_unfilled(self):
         self.assertEqual('',
-                         self.func("{Alb: %B}", {'artist': 'Foo'}, None, None))
+                         self.func("{Alb: %B}", {'artist': 'Foo'}))
 
     def test_with_unmatched_brackets_filled(self):
         self.assertEqual('Art: Foo}',
-                         self.func("Art: %A}", {'artist': 'Foo'}, None, None))
+                         self.func("Art: %A}", {'artist': 'Foo'}))
 
         self.assertEqual('{Art: Foo',
-                         self.func("{Art: %A", {'artist': 'Foo'}, None, None))
+                         self.func("{Art: %A", {'artist': 'Foo'}))
 
 
 class TestParseAndFormat(unittest.TestCase):
@@ -200,17 +196,6 @@ class TestParseAndFormat(unittest.TestCase):
         self.assertEqual('Art: Foo - Alb: Bar',
                          self.func("Art: %A - Alb: %B",
                                    {'artist': 'Foo', 'album': 'Bar'}, False))
-
-    def test_with_wintitle(self):
-        self.assertEqual('Time: ?',
-                         self.func("Time: %E", {}, False, True))
-
-        self.assertEqual('Time: 01:06',
-                         self.func("Time: %E", {}, False, True, '66'))
-
-    def test_with_no_wintitle(self):
-        self.assertEqual('Time: %E',
-                         self.func("Time: %E", {}, False, False, '66'))
 
 
 def additional_tests():

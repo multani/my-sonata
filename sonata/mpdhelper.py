@@ -131,6 +131,9 @@ class MPDSong(GObject.GObject):
     def values(self):
         return self._mapping.values()
 
+    def asdict(self):
+        return self._mapping.copy()
+
     @property
     def id(self):
         return int(self._mapping.get('id', 0))

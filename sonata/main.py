@@ -1619,10 +1619,11 @@ class Base:
 
     def update_wintitle(self):
         if self.status_is_play_or_pause():
-            newtitle = formatting.parse(
-                self.config.titleformat, self.songinfo,
-                False, True,
-                self.status.get('time', None))
+            # Add the value of MPD status' "time" property to the information of
+            # the song, so it can be properly formatted in the window title.
+            song = self.songinfo.asdict()
+            song.update({"status:time": self.status.get('time', None)})
+            newtitle = formatting.parse(self.config.titleformat, song, False)
         else:
             newtitle = '[Sonata]'
         if not self.last_title or self.last_title != newtitle:

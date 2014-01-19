@@ -13,9 +13,7 @@ formatcodes = formatting.formatcodes
 
 TODO:
     * FormatCode doesn't use %code
-    * Remove wintitle
     * Use super() instead of FormatCode...(self)
-    * Simplify signature of .format() (remove songpos too?)
     * TitleFormatCode .default changes every .format() call
     * _return_substrings creates empty items
 """
@@ -40,7 +38,7 @@ class FormatCode:
         self.key = key
         self.default = default
 
-    def format(self, item, wintitle, songpos):
+    def format(self, item):
         """Returns the value used in place of the format code"""
         return str(item.get(self.key, self.default))
 
@@ -55,7 +53,7 @@ class NumFormatCode(FormatCode):
         super().__init__(code, description, column, key, default)
         self.padding = padding
 
-    def format(self, item, wintitle, songpos):
+    def format(self, item):
         return str(item.get(self.key, self.default)).zfill(self.padding)
 
 
@@ -70,28 +68,27 @@ class PathFormatCode(FormatCode):
         super().__init__(code, description, column, key)
         self.func = getattr(os.path, path_func)
 
-    def format(self, item, wintitle, songpos):
-        return self.func(FormatCode.format(self, item, wintitle,
-                            songpos))
+    def format(self, item):
+        return self.func(FormatCode.format(self, item))
 
 
 class TitleFormatCode(FormatCode):
     """Implements format code behavior for track titles."""
 
-    def format(self, item, wintitle, songpos):
+    def format(self, item):
         path = item['file']
         full_path = re.match(r"^(http://|ftp://)", path)
         # TODO: do we really have to mutate self.default here?
         self.default = path if full_path else os.path.basename(path)
         self.default = misc.escape_html(self.default)
-        return FormatCode.format(self, item, wintitle, songpos)
+        return FormatCode.format(self, item)
 
 
 class LenFormatCode(FormatCode):
     """Implements format code behavior for song length."""
 
-    def format(self, item, wintitle, songpos):
-        time = FormatCode.format(self, item, wintitle, songpos)
+    def format(self, item):
+        time = FormatCode.format(self, item)
         if time.isdigit():
             time = misc.convert_time(int(time))
         return time
@@ -100,10 +97,12 @@ class LenFormatCode(FormatCode):
 class ElapsedFormatCode(FormatCode):
     """Implements format code behavior for elapsed time."""
 
-    def format(self, item, wintitle, songpos):
-        if not wintitle:
+    def format(self, item):
+        if 'status:time' not in item:
             return "%E"
-        elapsed_time = songpos.split(':')[0] if songpos else self.default
+
+        time = item['status:time']
+        elapsed_time = time.split(':')[0] if time else self.default
         if elapsed_time.isdigit():
             elapsed_time = misc.convert_time(int(elapsed_time))
         return elapsed_time
@@ -171,14 +170,14 @@ class EmptyBrackets(Exception):
     pass
 
 
-def _format_substrings(text, item, wintitle, songpos):
+def _format_substrings(text, item):
     has_brackets = text.startswith("{") and text.endswith("}")
 
     def formatter(m):
         format_code = replace_map[m.group(0)[1:]]
         if has_brackets and format_code.key not in item:
             raise EmptyBrackets
-        return format_code.format(item, wintitle, songpos)
+        return format_code.format(item)
 
     try:
         text = re.sub(replace_expr, formatter, text)
@@ -188,8 +187,8 @@ def _format_substrings(text, item, wintitle, songpos):
     return text[1:-1] if has_brackets else text
 
 
-def parse(format, item, use_escape_html, wintitle=False, songpos=None):
+def parse(format, item, use_escape_html):
     substrings = _return_substrings(format)
-    text = "".join(_format_substrings(sub, item, wintitle, songpos)
+    text = "".join(_format_substrings(sub, item)
                    for sub in substrings)
     return misc.escape_html(text) if use_escape_html else text
