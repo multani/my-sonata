@@ -87,77 +87,107 @@ class MPDCount:
 
 # Inherits from GObject for to be stored in Gtk's ListStore
 class MPDSong(GObject.GObject):
-    """Provide information about a song in a convenient format"""
+    """Provide information about a song in a convenient format
+
+    This object has the following properties:
+
+        * it is filled from the result of a MPD command which returns song
+          information
+        * attributes' values must provide a convenient value, instead of
+          providing only strings as the plain MPD protocol does
+        * it must provides easy and consistent access to 'basic' song
+          attributes, both as properties (clearer code when dealing with songs)
+          and as a dictionary (for a more standard interface + accessing
+          arbitrary attributes)
+        * is must be hashable so it can be used for caching stuff related to
+          songs
+    """
 
     def __init__(self, mapping):
-        self._mapping = {}
         for key, value in mapping.items():
             # Some attributes may be present several times, which is translated
             # into a list of values by python-mpd. We keep only the first one,
             # since Sonata doesn't really support multi-valued attributes at the
             # moment.
             if isinstance(value, list):
-                value = value[0]
-            self._mapping[key] = value
+                mapping[key] = value[0]
+
+        id_ = mapping.get('id')
+        pos = mapping.get('pos', '0')
+
+        # Well-known song fields
+        self._mapping = values = {
+            'id': int(id_) if id_ is not None else None,
+            'album': mapping.get('album'),
+            'artist': mapping.get('artist'),
+            'date': mapping.get('date'),
+            'disc': cleanup_numeric(mapping.get('disc', 0)),
+            'file': mapping.get('file', ''), # XXX should be always here?
+            'genre': mapping.get('genre'),
+            'pos': int(pos) if pos.isdigit() else 0,
+            'time': int(mapping.get('time', 0)),
+            'title': mapping.get('title'),
+            'track': cleanup_numeric(mapping.get('track', '0')),
+        }
+
+        for key, value in values.items():
+            setattr(self, key, value)
+
+        # Two songs with the same file path are great chances to be the same
+        # songs, so we get the hash from this path.
+        # If, for some reasons, we don't have any path, we just want objects to
+        # have a different hash (this is a very pathological case).
+        # We have a special case here: songs will always be different:
+        #   * if they have no 'file' attribute
+        #   * and if they have at least some other attributes
+        # If there's *no* attributes at all, it's a special 'empty' song, which
+        # must be dealt accordingly (and equals other 'empty' songs) :(
+        if self.file == '' and mapping:
+            self._hash = id(self)
+        else:
+            self._hash = hash(self.file)
+
         super().__init__()
 
-    def __eq__(self, other):
-        return isinstance(other, self.__class__) and \
-                self._mapping == other._mapping
+        # Store extra MPD fields, only for dict-access
+        # If this is a valid field, it can be moved to the mapping above.
+        for key, value in mapping.items():
+            if key not in values:
+                self._mapping[key] = value
 
-    def __ne__(self, other):
-        return not (self == other)
+    def __getitem__(self, key):
+        return self._mapping[key]
 
     def __contains__(self, key):
         return key in self._mapping
 
-    def __getitem__(self, key):
-        if key not in self:
-            raise KeyError(key)
-        return self.get(key)
+    def __eq__(self, other):
+        return hash(self) == hash(other)
 
-    def get(self, key, alt=None):
-        if key in self._mapping and hasattr(self, key):
-            return getattr(self, key)
-        else:
-            return self._mapping.get(key, alt)
+    def __ne__(self, other):
+        return hash(self) != hash(other)
 
-    def __getattr__(self, attr):
-        # Get the attribute's value directly into the internal mapping.
-        # This function is not called if the current object has a "real"
-        # attribute set.
-        return self._mapping.get(attr)
+    def __hash__(self):
+        return self._hash
 
-    def values(self):
-        return self._mapping.values()
+    def get(self, key, default=None):
+        try:
+            value = self[key]
+            if value is None:
+                value = default
+        except KeyError:
+            value = default
+        return value
 
-    def asdict(self):
-        return self._mapping.copy()
+    def __iter__(self):
+        for key, value in self._mapping.items():
+            if value is None:
+                value = ''
+            if not isinstance(value, str):
+                value = str(value)
 
-    @property
-    def id(self):
-        return int(self._mapping.get('id', 0))
+            yield(key, value)
 
-    @property
-    def track(self):
-        return cleanup_numeric(self._mapping.get('track', '0'))
-
-    @property
-    def pos(self):
-        v = self._mapping.get('pos', '0')
-        return int(v) if v.isdigit() else 0
-
-    @property
-    def time(self):
-        return int(self._mapping.get('time', 0))
-
-    @property
-    def disc(self):
-        return cleanup_numeric(self._mapping.get('disc', 0))
-
-    @property
-    def file(self):
-        return self._mapping.get('file', '') # XXX should be always here?
 
 def cleanup_numeric(value):
     # track and disc can be oddly formatted (eg, '4/10')

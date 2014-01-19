@@ -1621,7 +1621,7 @@ class Base:
         if self.status_is_play_or_pause():
             # Add the value of MPD status' "time" property to the information of
             # the song, so it can be properly formatted in the window title.
-            song = self.songinfo.asdict()
+            song = dict(self.songinfo)
             song.update({"status:time": self.status.get('time', None)})
             newtitle = formatting.parse(self.config.titleformat, song, False)
         else:
