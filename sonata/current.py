@@ -10,6 +10,32 @@ from sonata import ui, misc, formatting
 from sonata.mpdhelper import MPDSong
 
 
+class CellFormatter:
+    def __init__(self, get_current_song):
+        self._last_result = (None, None)
+        self.get_current_song = get_current_song
+
+    def cell_data_func(self, column, cell, model, iter, data):
+        formatter = data['formatter']
+        song = model[iter][0]
+        text = formatter.format(song)
+
+        if song == self.get_current_song():
+            new_bold = Pango.Weight.BOLD
+        else:
+            new_bold = Pango.Weight.NORMAL
+
+        # Try to minimize cell updates
+        old_bold, old_text = self._last_result
+        if old_text != text:
+            cell.set_property('text', text)
+
+        if old_bold != new_bold:
+            cell.set_property('weight', new_bold)
+
+        self._last_result = (new_bold, text)
+
+
 class Current:
     def __init__(self, config, mpd, name, on_button_press,
                  connected, sonata_loaded, songinfo, update_statusbar,
@@ -141,27 +167,15 @@ class Current:
         for column in self.view.get_columns():
             self.view.remove_column(column)
 
+        cell_formatter = CellFormatter(self.songinfo)
         for (name, formatter), width in zip(columns_def,
                                             self.config.columnwidths):
 
             column = Gtk.TreeViewColumn(name, cellrenderer)
             column.set_sizing(Gtk.TreeViewColumnSizing.FIXED)
 
-            def cell_data_func(column, cell, model, iter, data):
-                formatter = data['formatter']
-                song = model[iter][0]
-                text = formatter.format(song)
-                cell.set_property('text', text)
-
-                # We have to be sure to signal the view to redraw on song
-                # changes also, otherwise, this status will get updated only if
-                # the view is invalidated.
-                if song == self.songinfo():
-                    cell.set_property('weight', Pango.Weight.BOLD)
-                else:
-                    cell.set_property('weight', Pango.Weight.NORMAL)
-
-            column.set_cell_data_func(cellrenderer, cell_data_func,
+            column.set_cell_data_func(cellrenderer,
+                                      cell_formatter.cell_data_func,
                                       func_data={'formatter': formatter})
 
             # If just one column, we want it to expand with the tree, so
