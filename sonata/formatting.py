@@ -162,7 +162,7 @@ def _return_substrings(format):
 class ColumnFormatting:
     def __init__(self, multi_columns_format):
         self._format = multi_columns_format
-        self.sub_formatters = [CachingFormatter(f, True)
+        self.sub_formatters = [CachingFormatter(f, escape=True)
                                for f in multi_columns_format.split('|')]
         self.columns_names = self._parse_column_names()
 

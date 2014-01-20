@@ -28,7 +28,7 @@ class CellFormatter:
         # Try to minimize cell updates
         old_bold, old_text = self._last_result
         if old_text != text:
-            cell.set_property('text', text)
+            cell.set_property('markup', text)
 
         if old_bold != new_bold:
             cell.set_property('weight', new_bold)
