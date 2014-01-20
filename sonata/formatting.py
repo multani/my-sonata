@@ -21,6 +21,8 @@ import re
 import os
 import weakref
 
+from gi.repository import GLib
+
 from sonata import misc
 
 
@@ -89,7 +91,7 @@ class TitleFormatCode(FormatCode):
         full_path = re.match(r"^(http://|ftp://)", path)
         # TODO: do we really have to mutate self.default here?
         self.default = path if full_path else os.path.basename(path)
-        self.default = misc.escape_html(self.default)
+        self.default = GLib.markup_escape_text(self.default)
         return super().format(item)
 
 
@@ -235,4 +237,4 @@ def parse(format, item, use_escape_html):
 def _format_one(substrings, item, use_escape_html):
     text = "".join(_format_substrings(sub, item)
                    for sub in substrings)
-    return misc.escape_html(text) if use_escape_html else text
+    return GLib.markup_escape_text(text) if use_escape_html else text

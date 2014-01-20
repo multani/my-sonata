@@ -2593,7 +2593,7 @@ class Base:
                         for j in range(len(self.config.stream_names)):
                             if not stream_removed:
                                 if self.streamsdata.get_value(i, 1) == \
-                                   misc.escape_html(
+                                   GLib.markup_escape_text(
                                        self.config.stream_names[j]):
                                     self.config.stream_names.pop(j)
                                     self.config.stream_uris.pop(j)
@@ -3212,8 +3212,8 @@ class FullscreenApp:
 
     def set_text(self):
         is_play_or_pause, line1, line2 = self.get_fullscreen_info()
-        self.album_label_1.set_text(misc.escape_html(line1))
-        self.album_label_2.set_text(misc.escape_html(line2))
+        self.album_label_1.set_text(GLib.markup_escape_text(line1))
+        self.album_label_2.set_text(GLib.markup_escape_text(line2))
         if is_play_or_pause:
             self.album_label_1.show()
             self.album_label_2.show()

@@ -253,8 +253,8 @@ class Info:
             label.set_text(songinfo.get(name, ''))
 
         tracklabel.set_text(str(songinfo.track))
-        artistlabel.set_text(misc.escape_html(songinfo.artist))
-        albumlabel.set_text(misc.escape_html(songinfo.album))
+        artistlabel.set_text(GLib.markup_escape_text(songinfo.artist))
+        albumlabel.set_text(GLib.markup_escape_text(songinfo.album))
 
         path = os.path.join(self.config.musicdir[self.config.profile_num],
                             songinfo.file)

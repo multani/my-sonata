@@ -15,7 +15,7 @@ self.streams.populate()
 import logging
 import os
 
-from gi.repository import Gtk, Gdk, Pango
+from gi.repository import Gtk, Gdk, Pango, GLib
 
 from sonata import misc, ui
 
@@ -120,8 +120,8 @@ class Streams:
 
     def populate(self):
         self.streamsdata.clear()
-        streamsinfo = [{'name' : misc.escape_html(name),
-                'uri' : misc.escape_html(uri)}
+        streamsinfo = [{'name' : GLib.markup_escape_text(name),
+                'uri' : GLib.markup_escape_text(uri)}
                 for name, uri in zip(self.config.stream_names,
                              self.config.stream_uris)]
         streamsinfo.sort(key=lambda x: x["name"].lower()) # Remove case sensitivity

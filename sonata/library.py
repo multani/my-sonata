@@ -482,7 +482,7 @@ class Library:
         # add a button for each crumb
         for crumb in crumbs:
             text, icon, pb, target = crumb
-            text = misc.escape_html(text)
+            text = GLib.markup_escape_text(text)
             label = Gtk.Label(text, use_markup=True)
 
             if icon:
@@ -516,7 +516,7 @@ class Library:
                     name = os.path.basename(item['directory'])
                     data = SongRecord(path=item["directory"])
                     bd += [('d' + str(name).lower(), [self.openpb, data,
-                                                      misc.escape_html(name)])]
+                                                      GLib.markup_escape_text(name)])]
                 elif 'file' in item:
                     data = SongRecord(path=item['file'])
                     bd += [('f' + item['file'].lower(),
@@ -574,7 +574,7 @@ class Library:
                         artist=item)
                     data = SongRecord(artist=item)
                 if num_songs > 0:
-                    display = misc.escape_html(item)
+                    display = GLib.markup_escape_text(item)
                     display += self.add_display_info(num_songs, playtime)
                     bd += [(misc.lower_no_the(item), [pb, data, display])]
         elif albumview:
@@ -604,18 +604,18 @@ class Library:
                 if num_songs > 0:
                     data = SongRecord(artist=artist, album=album,
                                            year=year, path=path)
-                    display = misc.escape_html(album)
+                    display = GLib.markup_escape_text(album)
                     if artist and year and len(artist) > 0 and len(year) > 0 \
                        and artist != self.NOTAG and year != self.NOTAG:
                         display += " <span weight='light'>(%s, %s)</span>" \
-                                % (misc.escape_html(artist),
-                                   misc.escape_html(year))
+                                % (GLib.markup_escape_text(artist),
+                                   GLib.markup_escape_text(year))
                     elif artist and len(artist) > 0 and artist != self.NOTAG:
                         display += " <span weight='light'>(%s)</span>" \
-                                % misc.escape_html(artist)
+                                % GLib.markup_escape_text(artist)
                     elif year and len(year) > 0 and year != self.NOTAG:
                         display += " <span weight='light'>(%s)</span>" \
-                                % misc.escape_html(year)
+                                % GLib.markup_escape_text(year)
                     display += self.add_display_info(num_songs, playtime)
                     bd += [(misc.lower_no_the(album), [self.albumpb, data,
                                                        display])]
@@ -643,7 +643,7 @@ class Library:
                     playtime, num_songs = self.library_return_count(
                         genre=genre, artist=artist)
                     if num_songs > 0:
-                        display = misc.escape_html(artist)
+                        display = GLib.markup_escape_text(artist)
                         display += self.add_display_info(num_songs, playtime)
                         data = SongRecord(genre=genre, artist=artist)
                         bd += [(misc.lower_no_the(artist),
@@ -691,10 +691,10 @@ class Library:
                                           year=year, path=path)
                     if num_songs > 0:
                         cache_data = SongRecord(artist=artist, album=album, path=path)
-                        display = misc.escape_html(album)
+                        display = GLib.markup_escape_text(album)
                         if year and len(year) > 0 and year != self.NOTAG:
                             display += " <span weight='light'>(%s)</span>" \
-                                    % misc.escape_html(year)
+                                    % GLib.markup_escape_text(year)
                         display += self.add_display_info(num_songs, playtime)
                         ordered_year = year
                         if ordered_year == self.NOTAG:
@@ -1021,7 +1021,7 @@ class Library:
         treepath, _col, _x2, _y2 = pathinfo
 
         i = self.librarydata.get_iter(treepath.get_indices()[0])
-        path = misc.escape_html(self.librarydata.get_value(i, 1).path)
+        path = GLib.markup_escape_text(self.librarydata.get_value(i, 1).path)
         song = self.librarydata.get_value(i, 2)
         new_tooltip = "<b>%s:</b> %s\n<b>%s:</b> %s" \
                 % (_("Song"), song, _("Path"), path)
@@ -1271,7 +1271,7 @@ class Library:
         todos = todo.split(" ")
         regexps = []
         for i in range(len(todos)):
-            todos[i] = misc.escape_html(todos[i])
+            todos[i] = GLib.markup_escape_text(todos[i])
             todos[i] = re.escape(todos[i])
             todos[i] = '.*' + todos[i].lower()
             regexps.append(re.compile(todos[i]))

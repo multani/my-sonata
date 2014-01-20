@@ -664,7 +664,7 @@ class Current:
             self.view.set_model(self.store)
             return
 
-        regex = misc.escape_html(text)
+        regex = GLib.markup_escape_text(text)
         regex = re.escape(regex)
         regex = '.*' + regex.replace(' ', ' .*').lower()
         filter_regex = re.compile(regex)

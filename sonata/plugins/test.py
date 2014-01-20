@@ -20,9 +20,7 @@
 
 # nothing magical from here on
 
-from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, Pango
-
-from .misc import escape_html
+from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, Pango, GLib
 
 songlabel = None
 lyricslabel = None
@@ -56,8 +54,9 @@ def tab_construct():
 # this gets called when a new song is playing:
 def on_song_change(songinfo):
     if songinfo:
-        songlabel.set_markup("<b>Info for currently playing song:</b>"+
-                     "\n%s" % escape_html(repr(songinfo)))
+        songlabel.set_markup(
+            "<b>Info for currently playing song:</b>\n%s" %
+            GLib.markup_escape_text(repr(songinfo)))
     else:
         songlabel.set_text("Currently not playing any song.")
     songlabel.show()

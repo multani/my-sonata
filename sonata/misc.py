@@ -29,17 +29,6 @@ def convert_time_raw(seconds):
     seconds -= 60 * minutes
     return hours, minutes, seconds
 
-def escape_html(s):
-    if not s: # None or ""
-        return ""
-
-    # & needs to be escaped first, before more are introduced:
-    s = s.replace('&', '&amp;')
-    s = s.replace('<', '&lt;')
-    s = s.replace('>', '&gt;')
-    s = s.replace('"', '&quot;')
-    return s
-
 
 def unescape_html(s):
     s = s.replace('&lt;', '<')

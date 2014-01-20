@@ -20,7 +20,6 @@ from pwd import getpwuid
 
 from gi.repository import GLib, Gtk
 
-from sonata.misc import escape_html
 from sonata import ui
 
 
@@ -107,7 +106,9 @@ def update(label):
 
     sections = [outputs[0], (_("Networking"), (netstats, "")), outputs[1]]
     text = '\n'.join(["<b>%s</b>\n<tt>%s</tt><i>%s</i>\n" %
-              (title, escape_html(stdout), escape_html(stderr))
+              (title,
+               GLib.markup_escape_text(stdout),
+               GLib.markup_escape_text(stderr))
               for title, (stdout, stderr) in sections])
     label.set_markup(text.decode(locale.getpreferredencoding(),
                      'replace'))

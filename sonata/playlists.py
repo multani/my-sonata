@@ -16,7 +16,7 @@ self.playlists.populate()
 
 import os
 
-from gi.repository import Gtk, Pango, Gdk
+from gi.repository import Gtk, Pango, Gdk, GLib
 
 from sonata import ui, misc, mpdhelper as mpdh
 
@@ -199,7 +199,7 @@ class Playlists:
                 playlists = self.mpd.lsinfo()
             for item in playlists:
                 if 'playlist' in item:
-                    playlistinfo.append(misc.escape_html(item['playlist']))
+                    playlistinfo.append(GLib.markup_escape_text(item['playlist']))
 
             # Remove case sensitivity
             playlistinfo.sort(key=lambda x: x.lower())
