@@ -65,21 +65,11 @@ class Base:
         # The following attributes were used but not defined here before:
         self.album_current_artist = None
 
-        self.allow_art_search = None
-        self.choose_dialog = None
-        self.chooseimage_visible = None
-
-        self.imagelist = None
-
         self.iterate_handler = None
         self.local_dest_filename = None
 
         self.notification_width = None
 
-        self.remote_albumentry = None
-        self.remote_artistentry = None
-        self.remote_dest_filename = None
-        self.remotefilelist = None
         self.seekidle = None
         self.artwork = None
 
@@ -215,8 +205,7 @@ class Base:
         self.artwork = artwork.Artwork(
             self.config, misc.is_lang_rtl(self.window),
             self.schedule_gc_collect,
-            self.imagelist_append, self.remotefilelist_append,
-            self.set_allow_art_search, self.status_is_play_or_pause,
+            self.status_is_play_or_pause,
             self.album_image, self.tray_album_image)
 
 
@@ -838,9 +827,6 @@ class Base:
     def get_fullscreen_info(self):
         return (self.status_is_play_or_pause(), self.cursonglabel1.get_text(),
                 self.cursonglabel2.get_text())
-
-    def set_allow_art_search(self):
-        self.allow_art_search = True
 
     def populate_profiles_for_menu(self):
         host, port, _password = misc.mpd_env_vars()
@@ -2171,135 +2157,13 @@ class Base:
             GLib.idle_add(self.on_notebook_resize, self.notebook, None)
         dialog.hide()
 
-    def imagelist_append(self, elem):
-        self.imagelist.append(elem)
-
-    def remotefilelist_append(self, elem):
-        self.remotefilelist.append(elem)
-
-    def _init_choose_dialog(self):
-        self.choose_dialog = self.builder.get_object('artwork_dialog')
-        self.imagelist = self.builder.get_object('artwork_liststore')
-        self.remote_artistentry = self.builder.get_object('artwork_artist_entry')
-        self.remote_albumentry = self.builder.get_object('artwork_album_entry')
-        self.image_widget = self.builder.get_object('artwork_iconview')
-        refresh_button = self.builder.get_object('artwork_update_button')
-        refresh_button.connect('clicked', self.image_remote_refresh,
-                               self.image_widget)
-        self.remotefilelist = []
-
     def image_remote(self, _widget):
-        if not self.choose_dialog:
-            self._init_choose_dialog()
-
-        stream = self.songinfo.name
-        self.remote_dest_filename = artwork.artwork_path(self.songinfo,
-                                                         self.config)
-        album = self.songinfo.album or ''
-        artist = self.album_current_artist[1]
-        self.image_widget.connect('item-activated', self.image_remote_replace_cover,
-                            artist.replace("/", ""), album.replace("/", ""),
-                            stream)
-        self.choose_dialog.connect('response', self.image_remote_response,
-                                   self.image_widget, artist, album, stream)
-        self.remote_artistentry.set_text(artist)
-        self.remote_albumentry.set_text(album)
-        self.allow_art_search = True
-        self.chooseimage_visible = True
-        self.image_remote_refresh(None, self.image_widget)
-        self.choose_dialog.show_all()
-        self.choose_dialog.run()
-
-    def image_remote_refresh(self, _entry, imagewidget):
-        if not self.allow_art_search:
-            return
-        self.allow_art_search = False
-        self.artwork.artwork_stop_update()
-        while self.artwork.artwork_is_downloading_image():
-            while Gtk.events_pending():
-                Gtk.main_iteration()
-        self.imagelist.clear()
-        imagewidget.set_text_column(-1)
-        imagewidget.set_model(self.imagelist)
-        imagewidget.set_pixbuf_column(1)
-        imagewidget.grab_focus()
-        ui.change_cursor(Gdk.Cursor.new(Gdk.CursorType.WATCH))
-        thread = threading.Thread(target=self._image_remote_refresh,
-                                  args=(imagewidget, None))
-        thread.name = "ImageRemoteRefresh"
-        thread.daemon = True
-        thread.start()
-
-    def _image_remote_refresh(self, imagewidget, _ignore):
-        self.artwork.stop_art_update = False
-        # Retrieve all images from cover plugins
-        artist_search = self.remote_artistentry.get_text()
-        album_search = self.remote_albumentry.get_text()
-        if len(artist_search) == 0 and len(album_search) == 0:
-            GLib.idle_add(self.image_remote_no_tag_found, imagewidget)
-            return
-        filename = os.path.join(artwork.COVERS_TEMP_DIR, "<imagenum>.jpg")
-        misc.remove_dir_recursive(os.path.dirname(filename))
-        misc.create_dir(os.path.dirname(filename))
-        imgfound = self.artwork.artwork_download_img_to_file(artist_search,
-                                                             album_search,
-                                                             filename, True)
-        ui.change_cursor(None)
-        if self.chooseimage_visible:
-            if not imgfound:
-                GLib.idle_add(self.image_remote_no_covers_found, imagewidget)
-        self.call_gc_collect = True
-
-    def image_remote_no_tag_found(self, imagewidget):
-        self.image_remote_warning(imagewidget,
-                                  _("No artist or album name found."))
-
-    def image_remote_no_covers_found(self, imagewidget):
-        self.image_remote_warning(imagewidget, _("No cover art found."))
-
-    def image_remote_warning(self, imagewidget, msgstr):
-        liststore = Gtk.ListStore(int, str)
-        liststore.append([0, msgstr])
-        imagewidget.set_pixbuf_column(-1)
-        imagewidget.set_model(liststore)
-        imagewidget.set_text_column(1)
-        ui.change_cursor(None)
-        self.allow_art_search = True
-
-    def image_remote_response(self, dialog, response_id, imagewidget, artist,
-                              album, stream):
-        self.artwork.artwork_stop_update()
-        if response_id == Gtk.ResponseType.ACCEPT:
-            try:
-                self.image_remote_replace_cover(
-                    imagewidget, imagewidget.get_selected_items()[0], artist,
-                    album, stream)
-                # Force a resize of the info labels, if needed:
-                GLib.idle_add(self.on_notebook_resize, self.notebook, None)
-            except:
-                dialog.hide()
-        else:
-            dialog.hide()
-        ui.change_cursor(None)
-        self.chooseimage_visible = False
-
-    def image_remote_replace_cover(self, _iconview, path, _artist, _album,
-                                   _stream):
-        self.artwork.artwork_stop_update()
-        image_num = path.get_indices()[0]
-        if len(self.remotefilelist) > 0:
-            filename = self.remotefilelist[image_num]
-            if os.path.exists(filename):
-                shutil.move(filename, self.remote_dest_filename)
-                # And finally, set the image in the interface:
-                self.artwork.artwork_update(True)
-                # Clean up..
-                misc.remove_dir_recursive(os.path.dirname(filename))
-        self.chooseimage_visible = False
-        self.choose_dialog.hide()
-        while self.artwork.artwork_is_downloading_image():
-            while Gtk.events_pending():
-                Gtk.main_iteration()
+        dialog = RemoteArtworkChooser(self.builder, self.songinfo, self.config)
+        # XXX: manage the dialog
+        # XXX: update upon closing the dialog (if the image changed)
+        # And finally, set the image in the interface:
+        self.artwork.artwork_update(True)
+        self.on_notebook_resize(self.notebook, None)
 
     def header_save_column_widths(self):
         if not self.config.withdrawn and self.config.expanded:
@@ -3142,3 +3006,112 @@ class FullscreenApp:
         else:
             self.album_label_1.hide()
             self.album_label_2.hide()
+
+
+class RemoteArtworkChooser:
+    def __init__(self, builder, current_song, config):
+        self.logger = logging.getLogger("sonata.remote.artwork")
+        self.download_thread = None
+        self.config = config
+        self.current_song = current_song
+
+        self.remote_dest_filename = artwork.artwork_path(current_song, config)
+
+        self.store = builder.get_object('artwork_liststore')
+
+        iconview = builder.get_object('artwork_iconview')
+        iconview.connect('item-activated', self.on_image_activated)
+        iconview.set_model(self.store)
+
+        refresh_button = builder.get_object('artwork_update_button')
+        refresh_button.connect('clicked',
+                               self.on_refresh_clicked,
+                               iconview)
+
+        self.artist_entry = builder.get_object('artwork_artist_entry')
+        self.album_entry = builder.get_object('artwork_album_entry')
+        self.artist_entry.set_text(self.album_current_artist[1]) # TODO
+        self.album_entry.set_text(current_song.album or '')
+        for widget in [self.artist_entry, self.album_entry]:
+            widget.connect("key-press-event", self.on_entry_changed,
+                           refresh_button)
+
+        self.dialog = builder.get_object('artwork_dialog')
+        self.dialog.connect('response', self.on_dialog_response, iconview)
+
+    def on_entry_changed(self, _entry, button):
+        is_sensitive = True
+        for widget in [self.artist_entry, self.album_entry]:
+            if len(widget.get_text()) == 0:
+                is_sensitive = False
+        button.set_sensitive(is_sensitive)
+
+    def on_refresh_clicked(self, _button, iconview):
+        self.store.clear()
+        iconview.set_text_column(-1)
+        iconview.set_pixbuf_column(1)
+        iconview.grab_focus()
+        ui.change_cursor(Gdk.Cursor.new(Gdk.CursorType.WATCH))
+
+        # XXX: use tempfile and stuff
+        filename = os.path.join(artwork.COVERS_TEMP_DIR, "<imagenum>.jpg")
+        misc.remove_dir_recursive(os.path.dirname(filename))
+        misc.create_dir(os.path.dirname(filename))
+
+        def append_safe(filename):
+            # Called from the main Gtk thread
+            pix = GdkPixbuf.Pixbuf.new_from_file(filename) # TODO: check pix
+            pix = pix.scale_simple(148, 148, GdkPixbuf.InterpType.HYPER)
+            pix = img.do_style_cover(self.config, pix, 148, 148)
+            pix = img.pixbuf_add_border(pix)
+            self.store.append((filename, pix))
+
+        def on_finish_safe():
+            ui.change_cursor(None)
+            self.logger.debug("Finished download covers")
+            if len(self.store) > 0:
+                return
+
+            # XXX: display a proper message (replace the icon view maybe?)
+            # instead of hacking the icon view to put a fake icon inside.
+            self.logger.debug("No cover found!")
+
+
+        def on_new_cover(filename):
+            GLib.idle_add(append_safe, filename)
+
+        def on_finish():
+            GLib.idle_add(on_finish_safe)
+
+        self.download_thread =  artwork.MultipleCoversDownloader(
+            artist_search, album_search,
+            file_template, # XXX: use a temp directory instead
+            on_new_cover, on_finish)
+
+    def cancel_downloading(self):
+        if self.download_thread is None:
+            return
+
+        self.download_thread.stop()
+        self.download_thread = None
+
+    def on_image_activated(self, _iconview, path):
+        self.cancel_downloading()
+        filename = path.get_indices()[0]
+        if os.path.exists(filename):
+            shutil.move(filename, self.remote_dest_filename)
+            # TODO: force update of the GUI
+            # Clean up..
+            misc.remove_dir_recursive(os.path.dirname(filename))
+        self.hide()
+
+    def on_dialog_response(self, dialog, response_id, iconview):
+        self.cancel_downloading()
+        if response_id == Gtk.ResponseType.ACCEPT:
+            self.on_image_activated(iconview, iconview.get_selected_items()[0])
+        else:
+            self.hide()
+
+    def hide(self):
+        ui.change_cursor(None)
+        self.dialog.hide()

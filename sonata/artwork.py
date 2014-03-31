@@ -177,9 +177,7 @@ class Artwork(GObject.GObject):
     }
 
     def __init__(self, config, is_lang_rtl, schedule_gc_collect,
-                 imagelist_append, remotefilelist_append,
-                 allow_art_search, status_is_play_or_pause,
-                 album_image, tray_image):
+                 status_is_play_or_pause, album_image, tray_image):
         super().__init__()
 
         self.config = config
@@ -191,9 +189,6 @@ class Artwork(GObject.GObject):
 
         # callbacks to main XXX refactor to clear this list
         self.schedule_gc_collect = schedule_gc_collect
-        self.imagelist_append = imagelist_append
-        self.remotefilelist_append = remotefilelist_append
-        self.allow_art_search = allow_art_search
         self.status_is_play_or_pause = status_is_play_or_pause
 
         # local pixbufs, image file names
@@ -621,6 +616,52 @@ class Artwork(GObject.GObject):
         if self.lastalbumart is not None:
             return True
         return False
+
+
+class MultipleCoversDownloader(threading.Thread):
+    def __init__(self, artist, album, dest_filename, on_new_cover, on_finish):
+        super().__init__(name="MultipleCoversDownloader", daemon=True)
+        self._must_stop = False
+        self._artist = artist
+        self._ablum = album
+        self._dest_filename = dest_filename
+        self._on_new_cover = on_new_cover
+        self._on_finish = on_finish
+        self.start()
+
+    def run(self):
+        downloader = CoverDownloader(self._dest_filename, self._on_progress_cb,
+                                     True)
+
+        # Fetch covers from covers websites or such...
+        cover_fetchers = pluginsystem.get('cover_fetching')
+        for plugin, callback in cover_fetchers:
+            logger.info("Looking for covers for %r from %r (using %s)",
+                        self._album, self._artist, plugin.name)
+
+            try:
+                callback(self._artist, self._album,
+                         downloader.on_save_callback, downloader.on_err_cb)
+            except Exception as e:
+                if logger.isEnabledFor(logging.DEBUG):
+                    log = logger.exception
+                else:
+                    log = logger.warning
+
+                log("Error while downloading covers from %s: %s",
+                    plugin.name, e)
+
+            if downloader.found_images or self._must_stop:
+                break
+
+        self._on_finish()
+
+    def _on_progress_cb(self, filename, i):
+        self.on_new_cover(filename)
+        return not self._must_stop
+
+    def stop(self):
+        self._must_stop = True
 
 
 class CoverDownloader:
